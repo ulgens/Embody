@@ -37,7 +37,7 @@ import socket
 import time
 
 try:
-    runner_mod = op.unit_tests.op('TestRunnerExt').module
+    runner_mod = op.unit_tests.op("TestRunnerExt").module
     EmbodyTestCase = runner_mod.EmbodyTestCase
 except (AttributeError, NameError):
     pass
@@ -56,28 +56,28 @@ class EnvoyWatchdogBase(EmbodyTestCase):
     def setUp(self):
         super().setUp()
         self.envoy = self.embody.ext.Envoy
-        self.envoy_mod = self.embody.op('EnvoyExt').module
+        self.envoy_mod = self.embody.op("EnvoyExt").module
         self._patches = []
-        self._runs = []           # recorded run() scheduler calls (a, kw)
-        self._logs = []           # recorded _log() calls (message, level)
+        self._runs = []  # recorded run() scheduler calls (a, kw)
+        self._logs = []  # recorded _log() calls (message, level)
 
         # Snapshot every piece of state these tests mutate so the live server
         # is left exactly as found. COMP-stored values survive reinit; instance
         # attributes do not -- snapshot both kinds.
         comp = self.embody
         self._saved_store = {
-            'envoy_running': comp.fetch('envoy_running', None, search=False),
-            '_last_revive_frame': comp.fetch('_last_revive_frame', None, search=False),
-            '_watchdog_gen': comp.fetch('_watchdog_gen', None, search=False),
-            '_init_complete': comp.fetch('_init_complete', None, search=False),
+            "envoy_running": comp.fetch("envoy_running", None, search=False),
+            "_last_revive_frame": comp.fetch("_last_revive_frame", None, search=False),
+            "_watchdog_gen": comp.fetch("_watchdog_gen", None, search=False),
+            "_init_complete": comp.fetch("_init_complete", None, search=False),
         }
         self._saved_attr = {
-            '_server_gen': self.envoy._server_gen,
-            '_deadTicks': getattr(self.envoy, '_deadTicks', 0),
-            '_startingTicks': getattr(self.envoy, '_startingTicks', 0),
-            '_starting': getattr(self.envoy, '_starting', False),
-            '_runtime_port': getattr(self.envoy, '_runtime_port', None),
-            '_last_revive_time': getattr(self.envoy, '_last_revive_time', 0.0),
+            "_server_gen": self.envoy._server_gen,
+            "_deadTicks": getattr(self.envoy, "_deadTicks", 0),
+            "_startingTicks": getattr(self.envoy, "_startingTicks", 0),
+            "_starting": getattr(self.envoy, "_starting", False),
+            "_runtime_port": getattr(self.envoy, "_runtime_port", None),
+            "_last_revive_time": getattr(self.envoy, "_last_revive_time", 0.0),
         }
         self._saved_enable = comp.par.Envoyenable.eval()
         self._saved_status = comp.par.Envoystatus.eval()
@@ -85,11 +85,13 @@ class EnvoyWatchdogBase(EmbodyTestCase):
         # Patch the module-level run() so NO Start()/tick is ever dispatched.
         # Both the tick reschedule and _reviveDeadServer's Start() go through
         # this; recording them lets us assert side effects without a real start.
-        self._patch(self.envoy_mod, 'run',
-                    lambda *a, **kw: self._runs.append((a, kw)))
+        self._patch(self.envoy_mod, "run", lambda *a, **kw: self._runs.append((a, kw)))
         # Patch the instance _log so WARNINGs are counted, not logged for real.
-        self._patch(self.envoy, '_log',
-                    lambda message, level='INFO': self._logs.append((message, level)))
+        self._patch(
+            self.envoy,
+            "_log",
+            lambda message, level="INFO": self._logs.append((message, level)),
+        )
 
     def tearDown(self):
         while self._patches:
@@ -125,13 +127,13 @@ class EnvoyWatchdogBase(EmbodyTestCase):
         self._patches.append((obj, name, old, sentinel))
 
     def _warning_count(self):
-        return sum(1 for _msg, level in self._logs if level == 'WARNING')
+        return sum(1 for _msg, level in self._logs if level == "WARNING")
 
     def _start_schedule_count(self):
         """Count recorded run() calls that schedule Envoy.Start()."""
         n = 0
         for a, _kw in self._runs:
-            if a and isinstance(a[0], str) and '.Start()' in a[0]:
+            if a and isinstance(a[0], str) and ".Start()" in a[0]:
                 n += 1
         return n
 
@@ -140,19 +142,23 @@ class TestWatchdogArming(EnvoyWatchdogBase):
     """The watchdog methods exist and __init__ armed a positive generation."""
 
     def test_watchdog_methods_exist(self):
-        for name in ('_watchdogTick', '_probeAlive', '_reviveDeadServer',
-                     '_findAvailablePort'):
+        for name in (
+            "_watchdogTick",
+            "_probeAlive",
+            "_reviveDeadServer",
+            "_findAvailablePort",
+        ):
             self.assertTrue(
                 callable(getattr(self.envoy, name, None)),
-                f'EnvoyExt must expose a callable {name}')
+                f"EnvoyExt must expose a callable {name}",
+            )
 
     def test_init_armed_watchdog_generation(self):
         # __init__ does fetch('_watchdog_gen', 0) + 1, store(...). Whatever the
         # live count, it must be a positive int -- proof the loop was armed.
-        gen = self.embody.fetch('_watchdog_gen', 0)
+        gen = self.embody.fetch("_watchdog_gen", 0)
         self.assertIsInstance(gen, int)
-        self.assertGreater(gen, 0,
-                           'A positive _watchdog_gen proves the watchdog was armed')
+        self.assertGreater(gen, 0, "A positive _watchdog_gen proves the watchdog was armed")
 
 
 class TestReviveLogStormCooldown(EnvoyWatchdogBase):
@@ -170,13 +176,17 @@ class TestReviveLogStormCooldown(EnvoyWatchdogBase):
 
         # Exactly one revive: one Start() scheduled, one WARNING logged.
         self.assertEqual(
-            self._start_schedule_count(), 1,
-            'A same-frame revive storm must schedule Start() exactly once')
+            self._start_schedule_count(),
+            1,
+            "A same-frame revive storm must schedule Start() exactly once",
+        )
         self.assertEqual(
-            self._warning_count(), 1,
-            'A same-frame revive storm must log exactly one WARNING')
+            self._warning_count(),
+            1,
+            "A same-frame revive storm must log exactly one WARNING",
+        )
         # And the status was flipped by the single revive that went through.
-        self.assertStartsWith(str(self.embody.par.Envoystatus.eval()), 'Reviving')
+        self.assertStartsWith(str(self.embody.par.Envoystatus.eval()), "Reviving")
 
     def test_later_death_past_cooldown_revives_again(self):
         # First death -> one revive.
@@ -191,29 +201,34 @@ class TestReviveLogStormCooldown(EnvoyWatchdogBase):
 
         self.envoy._reviveDeadServer(was_running=False)
         self.assertEqual(
-            self._start_schedule_count(), 2,
-            'A death past the cooldown must schedule a second Start()')
+            self._start_schedule_count(),
+            2,
+            "A death past the cooldown must schedule a second Start()",
+        )
         self.assertEqual(
-            self._warning_count(), 2,
-            'A death past the cooldown must log a second WARNING')
+            self._warning_count(),
+            2,
+            "A death past the cooldown must log a second WARNING",
+        )
 
     def test_revive_bumps_server_generation_and_clears_running(self):
         self.envoy._last_revive_time = 0.0
-        self.embody.store('envoy_running', True)
+        self.embody.store("envoy_running", True)
         self.envoy._starting = True
         gen_before = self.envoy._server_gen
 
         self.envoy._reviveDeadServer(was_running=True)
 
         self.assertEqual(
-            self.envoy._server_gen, gen_before + 1,
-            'Revive must bump _server_gen so stale callbacks are ignored')
+            self.envoy._server_gen,
+            gen_before + 1,
+            "Revive must bump _server_gen so stale callbacks are ignored",
+        )
         self.assertFalse(
-            self.embody.fetch('envoy_running', True, search=False),
-            'Revive must clear envoy_running')
-        self.assertFalse(
-            self.envoy._starting,
-            'Revive must clear _starting')
+            self.embody.fetch("envoy_running", True, search=False),
+            "Revive must clear envoy_running",
+        )
+        self.assertFalse(self.envoy._starting, "Revive must clear _starting")
 
     def test_stale_persisted_frame_does_not_block_revive(self):
         """REGRESSION (the cross-session wedge): a high _last_revive_frame left in
@@ -223,28 +238,34 @@ class TestReviveLogStormCooldown(EnvoyWatchdogBase):
         negative (now - stored) delta sat permanently inside the cooldown window
         and silently no-op'd every revive: detection fired forever, restart never."""
         # Poison: a persisted frame far above any plausible session absTime.frame.
-        self.embody.store('_last_revive_frame', 999_999_999)
-        self.envoy._last_revive_time = 0.0          # cooldown genuinely expired
+        self.embody.store("_last_revive_frame", 999_999_999)
+        self.envoy._last_revive_time = 0.0  # cooldown genuinely expired
         self.envoy._deadTicks = 0
 
         self.envoy._reviveDeadServer(was_running=True)
 
         self.assertEqual(
-            self._start_schedule_count(), 1,
-            'A revive must fire despite a stale-high persisted _last_revive_frame')
+            self._start_schedule_count(),
+            1,
+            "A revive must fire despite a stale-high persisted _last_revive_frame",
+        )
         self.assertEqual(
-            self._warning_count(), 1,
-            'A revive must log its WARNING despite the stale persisted frame')
+            self._warning_count(),
+            1,
+            "A revive must log its WARNING despite the stale persisted frame",
+        )
         self.assertStartsWith(
-            str(self.embody.par.Envoystatus.eval()), 'Reviving',
-            'The revive must flip status to Reviving, not silently no-op')
+            str(self.embody.par.Envoystatus.eval()),
+            "Reviving",
+            "The revive must flip status to Reviving, not silently no-op",
+        )
 
 
 class TestWatchdogTickGeneration(EnvoyWatchdogBase):
     """Stale-generation ticks exit silently; the current generation reschedules."""
 
     def test_stale_generation_tick_is_inert(self):
-        live_gen = self.embody.fetch('_watchdog_gen', 1)
+        live_gen = self.embody.fetch("_watchdog_gen", 1)
         stale_gen = live_gen + 1  # gen != COMP gen and gen is truthy -> stale
 
         runs_before = len(self._runs)
@@ -253,21 +274,17 @@ class TestWatchdogTickGeneration(EnvoyWatchdogBase):
 
         self.envoy._watchdogTick(stale_gen)
 
+        self.assertEqual(len(self._runs), runs_before, "A stale-generation tick must NOT reschedule")
+        self.assertEqual(len(self._logs), logs_before, "A stale-generation tick must NOT log")
         self.assertEqual(
-            len(self._runs), runs_before,
-            'A stale-generation tick must NOT reschedule')
-        self.assertEqual(
-            len(self._logs), logs_before,
-            'A stale-generation tick must NOT log')
-        self.assertEqual(
-            self.envoy._deadTicks, deadticks_before,
-            'A stale-generation tick must NOT touch _deadTicks')
-        self.assertEqual(
-            self._start_schedule_count(), 0,
-            'A stale-generation tick must NOT revive')
+            self.envoy._deadTicks,
+            deadticks_before,
+            "A stale-generation tick must NOT touch _deadTicks",
+        )
+        self.assertEqual(self._start_schedule_count(), 0, "A stale-generation tick must NOT revive")
 
     def test_current_generation_tick_reschedules(self):
-        live_gen = self.embody.fetch('_watchdog_gen', 1)
+        live_gen = self.embody.fetch("_watchdog_gen", 1)
         # Keep the branch inert (disabled) so the only side effect is the
         # always-on reschedule at the end of the tick.
         self.embody.par.Envoyenable = 0
@@ -277,12 +294,15 @@ class TestWatchdogTickGeneration(EnvoyWatchdogBase):
 
         # Exactly one new run() -- the tick's own reschedule.
         self.assertEqual(
-            len(self._runs), runs_before + 1,
-            'The current-generation tick must reschedule itself exactly once')
+            len(self._runs),
+            runs_before + 1,
+            "The current-generation tick must reschedule itself exactly once",
+        )
         a, _kw = self._runs[-1]
         self.assertTrue(
-            a and isinstance(a[0], str) and '._watchdogTick(' in a[0],
-            'The reschedule must call _watchdogTick again')
+            a and isinstance(a[0], str) and "._watchdogTick(" in a[0],
+            "The reschedule must call _watchdogTick again",
+        )
 
     def test_legacy_gen_zero_tick_proceeds(self):
         # gen == 0 is a legacy tick armed before the generation guard existed;
@@ -293,8 +313,10 @@ class TestWatchdogTickGeneration(EnvoyWatchdogBase):
         self.envoy._watchdogTick(0)
 
         self.assertEqual(
-            len(self._runs), runs_before + 1,
-            'A legacy gen==0 tick must proceed and reschedule (never orphaned)')
+            len(self._runs),
+            runs_before + 1,
+            "A legacy gen==0 tick must proceed and reschedule (never orphaned)",
+        )
 
 
 class TestWatchdogReviveWhenDown(EnvoyWatchdogBase):
@@ -306,83 +328,88 @@ class TestWatchdogReviveWhenDown(EnvoyWatchdogBase):
         # bump generation / flip status / schedule Start). The tick-level branch
         # logic is what we are testing here, not the revive body.
         self._revives = []
-        self._patch(self.envoy, '_reviveDeadServer',
-                    lambda was_running: self._revives.append(was_running))
+        self._patch(
+            self.envoy,
+            "_reviveDeadServer",
+            lambda was_running: self._revives.append(was_running),
+        )
 
     def test_dead_socket_two_ticks_triggers_revive(self):
-        live_gen = self.embody.fetch('_watchdog_gen', 1)
+        live_gen = self.embody.fetch("_watchdog_gen", 1)
         self.embody.par.Envoyenable = 1
-        self.embody.store('_init_complete', True)
-        self.embody.store('envoy_running', True)
+        self.embody.store("_init_complete", True)
+        self.embody.store("envoy_running", True)
         self.envoy._starting = False
-        self.envoy._deadTicks = 1            # one short of the >=2 threshold
-        self._patch(self.envoy, '_probeAlive', lambda: False)
+        self.envoy._deadTicks = 1  # one short of the >=2 threshold
+        self._patch(self.envoy, "_probeAlive", lambda: False)
 
         self.envoy._watchdogTick(live_gen)
 
         self.assertEqual(
-            len(self._revives), 1,
-            'A dead socket reaching the 2-tick threshold must revive')
-        self.assertEqual(
-            self.envoy._deadTicks, 0,
-            '_deadTicks must reset to 0 after a revive fires')
+            len(self._revives),
+            1,
+            "A dead socket reaching the 2-tick threshold must revive",
+        )
+        self.assertEqual(self.envoy._deadTicks, 0, "_deadTicks must reset to 0 after a revive fires")
 
     def test_dead_socket_one_tick_does_not_revive(self):
-        live_gen = self.embody.fetch('_watchdog_gen', 1)
+        live_gen = self.embody.fetch("_watchdog_gen", 1)
         self.embody.par.Envoyenable = 1
-        self.embody.store('_init_complete', True)
-        self.embody.store('envoy_running', True)
+        self.embody.store("_init_complete", True)
+        self.embody.store("envoy_running", True)
         self.envoy._starting = False
-        self.envoy._deadTicks = 0            # first dead tick: increments to 1
-        self._patch(self.envoy, '_probeAlive', lambda: False)
+        self.envoy._deadTicks = 0  # first dead tick: increments to 1
+        self._patch(self.envoy, "_probeAlive", lambda: False)
 
         self.envoy._watchdogTick(live_gen)
 
         self.assertEqual(
-            len(self._revives), 0,
-            'A single dead tick must NOT revive (threshold is >=2)')
+            len(self._revives),
+            0,
+            "A single dead tick must NOT revive (threshold is >=2)",
+        )
         self.assertEqual(
-            self.envoy._deadTicks, 1,
-            'The first dead tick must increment _deadTicks to 1')
+            self.envoy._deadTicks,
+            1,
+            "The first dead tick must increment _deadTicks to 1",
+        )
 
     def test_live_socket_resets_dead_ticks(self):
-        live_gen = self.embody.fetch('_watchdog_gen', 1)
+        live_gen = self.embody.fetch("_watchdog_gen", 1)
         self.embody.par.Envoyenable = 1
-        self.embody.store('_init_complete', True)
-        self.embody.store('envoy_running', True)
+        self.embody.store("_init_complete", True)
+        self.embody.store("envoy_running", True)
         self.envoy._starting = False
         self.envoy._deadTicks = 1
-        self._patch(self.envoy, '_probeAlive', lambda: True)
+        self._patch(self.envoy, "_probeAlive", lambda: True)
 
         self.envoy._watchdogTick(live_gen)
 
-        self.assertEqual(
-            len(self._revives), 0,
-            'A live socket must never revive')
-        self.assertEqual(
-            self.envoy._deadTicks, 0,
-            'A live socket must reset _deadTicks to 0')
+        self.assertEqual(len(self._revives), 0, "A live socket must never revive")
+        self.assertEqual(self.envoy._deadTicks, 0, "A live socket must reset _deadTicks to 0")
 
     def test_disabled_branch_resets_and_never_revives(self):
-        live_gen = self.embody.fetch('_watchdog_gen', 1)
-        self.embody.par.Envoyenable = 0     # disabled -> idle branch
-        self.embody.store('_init_complete', True)
+        live_gen = self.embody.fetch("_watchdog_gen", 1)
+        self.embody.par.Envoyenable = 0  # disabled -> idle branch
+        self.embody.store("_init_complete", True)
         self.envoy._deadTicks = 5
         self.envoy._startingTicks = 3
         # Probe must NOT even be consulted on the disabled branch.
-        self._patch(self.envoy, '_probeAlive',
-                    lambda: (_ for _ in ()).throw(
-                        AssertionError('probe must not run while disabled')))
+        self._patch(
+            self.envoy,
+            "_probeAlive",
+            lambda: (_ for _ in ()).throw(AssertionError("probe must not run while disabled")),
+        )
 
         self.envoy._watchdogTick(live_gen)
 
+        self.assertEqual(len(self._revives), 0, "The disabled branch must never revive")
+        self.assertEqual(self.envoy._deadTicks, 0, "The disabled branch must reset _deadTicks")
         self.assertEqual(
-            len(self._revives), 0,
-            'The disabled branch must never revive')
-        self.assertEqual(self.envoy._deadTicks, 0,
-                         'The disabled branch must reset _deadTicks')
-        self.assertEqual(self.envoy._startingTicks, 0,
-                         'The disabled branch must reset _startingTicks')
+            self.envoy._startingTicks,
+            0,
+            "The disabled branch must reset _startingTicks",
+        )
 
     def test_installing_status_idles_and_resets(self):
         """A one-time deps install ('Installing deps...') must idle the watchdog:
@@ -390,24 +417,26 @@ class TestWatchdogReviveWhenDown(EnvoyWatchdogBase):
         the old _init_complete pre-init branch -- the socket-truth watchdog keys
         off the visible status, and 'Installing' is the legitimately-long op it
         must never interrupt."""
-        live_gen = self.embody.fetch('_watchdog_gen', 1)
+        live_gen = self.embody.fetch("_watchdog_gen", 1)
         self.embody.par.Envoyenable = 1
-        self.embody.par.Envoystatus = 'Installing deps... (one-time)'
+        self.embody.par.Envoystatus = "Installing deps... (one-time)"
         self.envoy._deadTicks = 4
         self.envoy._startingTicks = 2
-        self._patch(self.envoy, '_probeAlive',
-                    lambda: (_ for _ in ()).throw(
-                        AssertionError('probe must not run while installing')))
+        self._patch(
+            self.envoy,
+            "_probeAlive",
+            lambda: (_ for _ in ()).throw(AssertionError("probe must not run while installing")),
+        )
 
         self.envoy._watchdogTick(live_gen)
 
+        self.assertEqual(len(self._revives), 0, "The installing branch must never revive")
+        self.assertEqual(self.envoy._deadTicks, 0, "The installing branch must reset _deadTicks")
         self.assertEqual(
-            len(self._revives), 0,
-            'The installing branch must never revive')
-        self.assertEqual(self.envoy._deadTicks, 0,
-                         'The installing branch must reset _deadTicks')
-        self.assertEqual(self.envoy._startingTicks, 0,
-                         'The installing branch must reset _startingTicks')
+            self.envoy._startingTicks,
+            0,
+            "The installing branch must reset _startingTicks",
+        )
 
     def test_init_complete_false_no_longer_blocks_revive(self):
         """SOCKET-TRUTH (the save-wedge fix): _init_complete=False must NOT idle
@@ -415,20 +444,22 @@ class TestWatchdogReviveWhenDown(EnvoyWatchdogBase):
         unstores _init_complete, and the old `enabled and init_done` gate sent the
         tick idle -- wedging a dead server forever. Now the socket is the truth: a
         dead socket while enabled revives regardless of _init_complete."""
-        live_gen = self.embody.fetch('_watchdog_gen', 1)
+        live_gen = self.embody.fetch("_watchdog_gen", 1)
         self.embody.par.Envoyenable = 1
-        self.embody.store('_init_complete', False)            # the save-cleared state
-        self.embody.par.Envoystatus = 'Running on port 9870'  # settled, stale
-        self.embody.store('envoy_running', True)
+        self.embody.store("_init_complete", False)  # the save-cleared state
+        self.embody.par.Envoystatus = "Running on port 9870"  # settled, stale
+        self.embody.store("envoy_running", True)
         self.envoy._starting = False
-        self.envoy._deadTicks = 1                              # one short of >=2
-        self._patch(self.envoy, '_probeAlive', lambda: False)  # socket dead
+        self.envoy._deadTicks = 1  # one short of >=2
+        self._patch(self.envoy, "_probeAlive", lambda: False)  # socket dead
 
         self.envoy._watchdogTick(live_gen)
 
         self.assertEqual(
-            len(self._revives), 1,
-            'A dead socket while enabled must revive even with _init_complete=False')
+            len(self._revives),
+            1,
+            "A dead socket while enabled must revive even with _init_complete=False",
+        )
 
 
 class TestProbeAlive(EnvoyWatchdogBase):
@@ -451,7 +482,7 @@ class TestProbeAlive(EnvoyWatchdogBase):
         """Bind an ephemeral localhost listener; return its port."""
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.bind(('127.0.0.1', 0))
+        s.bind(("127.0.0.1", 0))
         s.listen(1)
         self._listener = s
         return s.getsockname()[1]
@@ -461,7 +492,8 @@ class TestProbeAlive(EnvoyWatchdogBase):
         self.envoy._runtime_port = port
         self.assertTrue(
             self.envoy._probeAlive(),
-            'A live localhost listener on _runtime_port must probe True')
+            "A live localhost listener on _runtime_port must probe True",
+        )
 
     def test_probe_false_when_listener_closed(self):
         port = self._open_listener()
@@ -469,16 +501,15 @@ class TestProbeAlive(EnvoyWatchdogBase):
         self._listener.close()
         self._listener = None
         self.envoy._runtime_port = port
-        self.assertFalse(
-            self.envoy._probeAlive(),
-            'A closed/refused port must probe False')
+        self.assertFalse(self.envoy._probeAlive(), "A closed/refused port must probe False")
 
     def test_probe_true_when_port_unknown(self):
         # Unknown port -> True so the watchdog never restarts on missing info.
         self.envoy._runtime_port = None
         self.assertTrue(
             self.envoy._probeAlive(),
-            'A None _runtime_port must probe True (never restart on missing info)')
+            "A None _runtime_port must probe True (never restart on missing info)",
+        )
 
 
 class TestFindAvailablePort(EnvoyWatchdogBase):
@@ -507,7 +538,7 @@ class TestFindAvailablePort(EnvoyWatchdogBase):
         """Bind+release an ephemeral port to learn a number that is free now."""
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.bind(('127.0.0.1', 0))
+        s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
         s.close()
         return port
@@ -516,7 +547,7 @@ class TestFindAvailablePort(EnvoyWatchdogBase):
         """Bind+listen on an ephemeral port and keep it held; return the port."""
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.bind(('127.0.0.1', 0))
+        s.bind(("127.0.0.1", 0))
         s.listen(1)
         self._held.append(s)
         return s.getsockname()[1]
@@ -527,34 +558,29 @@ class TestFindAvailablePort(EnvoyWatchdogBase):
         base = self._free_port()
         # Use a wide range so a transient collision still resolves to a port.
         result = self.envoy._findAvailablePort(base, range_size=10)
-        self.assertIsNotNone(
-            result, 'A free base port must resolve to a usable port')
+        self.assertIsNotNone(result, "A free base port must resolve to a usable port")
         self.assertIsInstance(result, int)
 
     def test_force_free_branch_invoked_when_base_busy(self):
         # Hold the base port so it is genuinely in use (but NOT registered by
         # another instance), which routes through the force-close branch.
         busy = self._hold_port()
-        called = {'n': 0}
+        called = {"n": 0}
 
         def fake_force_close():
-            called['n'] += 1
+            called["n"] += 1
             return False  # nothing of ours was holding it -> fall to range scan
 
-        self._patch(self.envoy, '_forceCloseOldServer', fake_force_close)
+        self._patch(self.envoy, "_forceCloseOldServer", fake_force_close)
 
         result = self.envoy._findAvailablePort(busy, range_size=10)
 
-        self.assertGreaterEqual(
-            called['n'], 1,
-            'A busy, non-foreign base port must attempt a force-close')
+        self.assertGreaterEqual(called["n"], 1, "A busy, non-foreign base port must attempt a force-close")
         # The held base is busy; the scan should hand back a different port,
         # or None if the whole range is somehow occupied. Either is valid; we
         # only assert it never returns the still-held base port.
         if result is not None:
-            self.assertNotEqual(
-                result, busy,
-                'Must not return the still-held base port')
+            self.assertNotEqual(result, busy, "Must not return the still-held base port")
 
     def test_force_freed_base_port_reused(self):
         # Simulate force-close actually freeing the port: hold it, then have
@@ -570,9 +596,11 @@ class TestFindAvailablePort(EnvoyWatchdogBase):
                 pass
             return True  # we "owned" it; drain-wait will re-check the base port
 
-        self._patch(self.envoy, '_forceCloseOldServer', fake_force_close)
+        self._patch(self.envoy, "_forceCloseOldServer", fake_force_close)
 
         result = self.envoy._findAvailablePort(busy, range_size=10)
         self.assertEqual(
-            result, busy,
-            'After force-close frees the base port, it must be reused (no drift)')
+            result,
+            busy,
+            "After force-close frees the base port, it must be reused (no drift)",
+        )

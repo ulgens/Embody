@@ -15,14 +15,13 @@ Tracked .tdn files on disk survive mode flips (non-destructive transitions).
 import os
 
 try:
-    runner_mod = op.unit_tests.op('TestRunnerExt').module
+    runner_mod = op.unit_tests.op("TestRunnerExt").module
     EmbodyTestCase = runner_mod.EmbodyTestCase
 except (AttributeError, NameError):
     pass
 
 
 class TestTdnMode(EmbodyTestCase):
-
     # ------------------------------------------------------------------
     # Lifecycle: snapshot the mode so each test can flip it safely.
     # ------------------------------------------------------------------
@@ -30,14 +29,17 @@ class TestTdnMode(EmbodyTestCase):
     def setUp(self):
         super().setUp()
         # Suppress the 'Off' confirmation dialog when flipping to off.
-        self.embody.store('_smoke_test_responses', {
-            'Embody - Disable TDN': 1,  # 1 = 'Keep .tdn files (disable only)'
-        })
+        self.embody.store(
+            "_smoke_test_responses",
+            {
+                "Embody - Disable TDN": 1,  # 1 = 'Keep .tdn files (disable only)'
+            },
+        )
         self._mode_was = self.embody.par.Tdnmode.eval()
 
     def tearDown(self):
         # Restore mode without firing parexec side-effects.
-        parexec = self.embody.op('parexec')
+        parexec = self.embody.op("parexec")
         was_active = parexec.par.active.eval()
         parexec.par.active = False
         try:
@@ -53,14 +55,14 @@ class TestTdnMode(EmbodyTestCase):
         except Exception:
             pass
         try:
-            self.embody.unstore('_smoke_test_responses')
+            self.embody.unstore("_smoke_test_responses")
         except Exception:
             pass
         super().tearDown()
 
     def _setMode(self, mode: str) -> None:
         """Set Tdnmode with parexec suppressed (no side-effects)."""
-        parexec = self.embody.op('parexec')
+        parexec = self.embody.op("parexec")
         was_active = parexec.par.active.eval()
         parexec.par.active = False
         try:
@@ -73,44 +75,44 @@ class TestTdnMode(EmbodyTestCase):
     # ------------------------------------------------------------------
 
     def test_tdnmode_parameter_exists_as_menu(self):
-        par = getattr(self.embody.par, 'Tdnmode', None)
-        self.assertIsNotNone(par, 'Tdnmode parameter must exist')
-        self.assertEqual(par.style, 'Menu')
+        par = getattr(self.embody.par, "Tdnmode", None)
+        self.assertIsNotNone(par, "Tdnmode parameter must exist")
+        self.assertEqual(par.style, "Menu")
 
     def test_tdnmode_menu_has_three_values(self):
         par = self.embody.par.Tdnmode
         names = list(par.menuNames)
-        self.assertEqual(sorted(names), ['export', 'full', 'off'])
+        self.assertEqual(sorted(names), ["export", "full", "off"])
 
     def test_tdnmode_default_is_export(self):
-        self.assertEqual(self.embody.par.Tdnmode.default, 'export')
+        self.assertEqual(self.embody.par.Tdnmode.default, "export")
 
     def test_tdnmode_lives_on_tdn_page(self):
         found_page = None
         for page in self.embody.customPages:
             for p in page.pars:
-                if p.name == 'Tdnmode':
+                if p.name == "Tdnmode":
                     found_page = page.name
                     break
             if found_page:
                 break
-        self.assertEqual(found_page, 'TDN')
+        self.assertEqual(found_page, "TDN")
 
     # ------------------------------------------------------------------
     # 2. Helper short-circuits
     # ------------------------------------------------------------------
 
     def test_tdnMode_helper_returns_menu_value(self):
-        for mode in ('off', 'export', 'full'):
+        for mode in ("off", "export", "full"):
             self._setMode(mode)
             self.assertEqual(self.embody_ext._tdnMode(), mode)
 
     def test_tdnEnabled_false_only_when_off(self):
-        self._setMode('off')
+        self._setMode("off")
         self.assertFalse(self.embody_ext._tdnEnabled())
-        self._setMode('export')
+        self._setMode("export")
         self.assertTrue(self.embody_ext._tdnEnabled())
-        self._setMode('full')
+        self._setMode("full")
         self.assertTrue(self.embody_ext._tdnEnabled())
 
     # ------------------------------------------------------------------
@@ -118,36 +120,33 @@ class TestTdnMode(EmbodyTestCase):
     # ------------------------------------------------------------------
 
     def test_reconstruct_skips_in_off(self):
-        self._setMode('off')
+        self._setMode("off")
         log_before = self.embody_ext._log_counter
         self.embody_ext.ReconstructTDNComps()
-        new_logs = [e for e in self.embody_ext._log_buffer
-                    if e['id'] > log_before]
-        messages = ' | '.join(e.get('message', '') for e in new_logs)
-        self.assertIn('mode=off', messages)
+        new_logs = [e for e in self.embody_ext._log_buffer if e["id"] > log_before]
+        messages = " | ".join(e.get("message", "") for e in new_logs)
+        self.assertIn("mode=off", messages)
 
     def test_reconstruct_skips_in_export(self):
-        self._setMode('export')
+        self._setMode("export")
         log_before = self.embody_ext._log_counter
         self.embody_ext.ReconstructTDNComps()
-        new_logs = [e for e in self.embody_ext._log_buffer
-                    if e['id'] > log_before]
-        messages = ' | '.join(e.get('message', '') for e in new_logs)
-        self.assertIn('mode=export', messages)
+        new_logs = [e for e in self.embody_ext._log_buffer if e["id"] > log_before]
+        messages = " | ".join(e.get("message", "") for e in new_logs)
+        self.assertIn("mode=export", messages)
 
     # ------------------------------------------------------------------
     # 4. SaveTDN gating
     # ------------------------------------------------------------------
 
     def test_savetdn_skips_when_off(self):
-        self._setMode('off')
+        self._setMode("off")
         log_before = self.embody_ext._log_counter
-        self.embody_ext.SaveTDN('/no_such_op')
-        new_logs = [e for e in self.embody_ext._log_buffer
-                    if e['id'] > log_before]
-        messages = ' | '.join(e.get('message', '') for e in new_logs)
-        self.assertIn('TDN disabled', messages)
-        self.assertNotIn('Operator not found', messages)
+        self.embody_ext.SaveTDN("/no_such_op")
+        new_logs = [e for e in self.embody_ext._log_buffer if e["id"] > log_before]
+        messages = " | ".join(e.get("message", "") for e in new_logs)
+        self.assertIn("TDN disabled", messages)
+        self.assertNotIn("Operator not found", messages)
 
     # ------------------------------------------------------------------
     # 4b. Regression guards for the save-cycle hardening
@@ -159,18 +158,20 @@ class TestTdnMode(EmbodyTestCase):
         onProjectPostSave would leave _init_complete False -- silently
         disabling every parexec callback for the rest of the session.
         """
-        self._setMode('export')
+        self._setMode("export")
         # Simulate the pre-save unstore + post-save restore handshake.
-        self.embody.unstore('_init_complete')
-        self.embody.unstore('_tdn_stripped_paths')  # Export never sets this
+        self.embody.unstore("_init_complete")
+        self.embody.unstore("_tdn_stripped_paths")  # Export never sets this
         # Call postSave directly (it's a module-level function in execute.py).
-        execute_mod = self.embody.op('execute').module
+        execute_mod = self.embody.op("execute").module
         execute_mod.onProjectPostSave()
-        flag = self.embody.fetch('_init_complete', None, search=False)
-        self.assertTrue(flag,
-            f'_init_complete must be True after post-save in Export mode, '
-            f'got {flag!r}. This is the exact landmine the session fix '
-            f'addressed -- if this regresses, parexec goes silent on save.')
+        flag = self.embody.fetch("_init_complete", None, search=False)
+        self.assertTrue(
+            flag,
+            f"_init_complete must be True after post-save in Export mode, "
+            f"got {flag!r}. This is the exact landmine the session fix "
+            f"addressed -- if this regresses, parexec goes silent on save.",
+        )
 
     def test_envoy_not_restarted_when_strip_skipped(self):
         """Regression: Envoy restart is conditional on a strip having run.
@@ -178,17 +179,20 @@ class TestTdnMode(EmbodyTestCase):
         so tearing down the MCP server on every save is pointless and
         user-visible (momentary MCP disconnect).
         """
-        self._setMode('export')
-        self.embody.unstore('_tdn_stripped_paths')
+        self._setMode("export")
+        self.embody.unstore("_tdn_stripped_paths")
         # Track 'Envoystatus' change as a signal the restart path ran.
         prev_status = self.embody.par.Envoystatus.eval()
-        execute_mod = self.embody.op('execute').module
+        execute_mod = self.embody.op("execute").module
         execute_mod.onProjectPostSave()
         status = self.embody.par.Envoystatus.eval()
-        self.assertNotEqual(status, 'Restarting after save...',
-            'Envoy must NOT be restarted when no strip ran. Status changed '
-            f'from {prev_status!r} to {status!r} -- if this regresses, '
-            'every Off/Export save needlessly drops the MCP server.')
+        self.assertNotEqual(
+            status,
+            "Restarting after save...",
+            "Envoy must NOT be restarted when no strip ran. Status changed "
+            f"from {prev_status!r} to {status!r} -- if this regresses, "
+            "every Off/Export save needlessly drops the MCP server.",
+        )
 
     # ------------------------------------------------------------------
     # 5. Disk-side non-destructive mode flips
@@ -201,29 +205,26 @@ class TestTdnMode(EmbodyTestCase):
         def snapshot():
             rows = []
             for i in range(1, table.numRows):
-                if table[i, 'strategy'].val == 'tdn':
+                if table[i, "strategy"].val == "tdn":
                     rows.append((
-                        table[i, 'path'].val,
-                        table[i, 'rel_file_path'].val,
+                        table[i, "path"].val,
+                        table[i, "rel_file_path"].val,
                     ))
             files = set()
             if os.path.isdir(ext_folder):
                 for root, _, filenames in os.walk(ext_folder):
                     for fn in filenames:
-                        if fn.endswith('.tdn'):
-                            files.add(os.path.relpath(
-                                os.path.join(root, fn), ext_folder))
+                        if fn.endswith(".tdn"):
+                            files.add(os.path.relpath(os.path.join(root, fn), ext_folder))
             return sorted(rows), files
 
         rows_before, files_before = snapshot()
         # Cycle through all three modes and back.
-        for mode in ('off', 'export', 'full', self._mode_was):
+        for mode in ("off", "export", "full", self._mode_was):
             self._setMode(mode)
         rows_after, files_after = snapshot()
-        self.assertEqual(rows_before, rows_after,
-            'Mode flips must not mutate externalizations table')
-        self.assertEqual(files_before, files_after,
-            'Mode flips must not delete .tdn files on disk')
+        self.assertEqual(rows_before, rows_after, "Mode flips must not mutate externalizations table")
+        self.assertEqual(files_before, files_after, "Mode flips must not delete .tdn files on disk")
 
     # ------------------------------------------------------------------
     # 6. UI gating per mode
@@ -231,41 +232,37 @@ class TestTdnMode(EmbodyTestCase):
 
     def _getTdnPage(self):
         for page in self.embody.customPages:
-            if page.name == 'TDN':
+            if page.name == "TDN":
                 return page
         return None
 
     def test_gating_off_greys_all_except_mode(self):
-        self._setMode('off')
+        self._setMode("off")
         self.embody_ext._applyTdnModeGating()
         page = self._getTdnPage()
         self.assertIsNotNone(page)
         for p in page.pars:
-            if p.name == 'Tdnmode':
-                self.assertTrue(p.enable, 'Tdnmode itself must stay live')
+            if p.name == "Tdnmode":
+                self.assertTrue(p.enable, "Tdnmode itself must stay live")
             else:
-                self.assertFalse(p.enable,
-                    f'{p.name} should be greyed in Off mode')
+                self.assertFalse(p.enable, f"{p.name} should be greyed in Off mode")
 
     def test_gating_export_greys_strip_params_only(self):
-        self._setMode('export')
+        self._setMode("export")
         self.embody_ext._applyTdnModeGating()
         full_only = self.embody_ext._TDN_FULL_ONLY_PARAMS
         page = self._getTdnPage()
         for p in page.pars:
-            if p.name == 'Tdnmode':
+            if p.name == "Tdnmode":
                 self.assertTrue(p.enable)
             elif p.name in full_only:
-                self.assertFalse(p.enable,
-                    f'{p.name} should be greyed in Export mode')
+                self.assertFalse(p.enable, f"{p.name} should be greyed in Export mode")
             else:
-                self.assertTrue(p.enable,
-                    f'{p.name} should be live in Export mode')
+                self.assertTrue(p.enable, f"{p.name} should be live in Export mode")
 
     def test_gating_full_enables_all(self):
-        self._setMode('full')
+        self._setMode("full")
         self.embody_ext._applyTdnModeGating()
         page = self._getTdnPage()
         for p in page.pars:
-            self.assertTrue(p.enable,
-                f'{p.name} should be live in Full mode')
+            self.assertTrue(p.enable, f"{p.name} should be live in Full mode")

@@ -46,13 +46,14 @@ def configure_mcp_client(ext, port, target_dir=None):
             git root if available, else project.folder.
     """
     from pathlib import Path
+
     try:
         project_dir = Path(project.folder)
 
         if target_dir is None:
             # Find the git root by walking up from the .toe directory
             for parent_path in [project_dir] + list(project_dir.parents):
-                if (parent_path / '.git').exists():
+                if (parent_path / ".git").exists():
                     target_dir = parent_path
                     break
             if target_dir is None:
@@ -61,15 +62,15 @@ def configure_mcp_client(ext, port, target_dir=None):
         target_dir = Path(target_dir)
 
         # --- Deploy the STDIO bridge script ---
-        bridge_dir = target_dir / '.embody'
+        bridge_dir = target_dir / ".embody"
         bridge_dir.mkdir(parents=True, exist_ok=True)
-        bridge_path = bridge_dir / 'envoy-bridge.py'
+        bridge_path = bridge_dir / "envoy-bridge.py"
 
         # Read bridge script from templates textDAT, else from disk fallback
         bridge_content = None
         try:
-            templates = ext.ownerComp.op('templates')
-            bridge_dat = templates.op('text_envoy_bridge') if templates else None
+            templates = ext.ownerComp.op("templates")
+            bridge_dat = templates.op("text_envoy_bridge") if templates else None
             if bridge_dat:
                 bridge_content = bridge_dat.text
         except Exception:
@@ -77,14 +78,15 @@ def configure_mcp_client(ext, port, target_dir=None):
 
         if not bridge_content:
             # Fallback: read from the externalized file in dev/embody/
-            source = Path(project.folder) / 'embody' / 'envoy_bridge.py'
+            source = Path(project.folder) / "embody" / "envoy_bridge.py"
             if source.exists():
-                bridge_content = source.read_text(encoding='utf-8')
+                bridge_content = source.read_text(encoding="utf-8")
 
         if not bridge_content:
             ext._log(
-                'Bridge script source not found -- falling back to HTTP transport',
-                'WARNING')
+                "Bridge script source not found -- falling back to HTTP transport",
+                "WARNING",
+            )
             configure_mcp_client_http(ext, target_dir, port)
             return
 
@@ -94,48 +96,50 @@ def configure_mcp_client(ext, port, target_dir=None):
         needs_write = True
         if bridge_path.exists():
             try:
-                existing = bridge_path.read_text(encoding='utf-8')
+                existing = bridge_path.read_text(encoding="utf-8")
                 if existing == bridge_content:
                     needs_write = False
             except OSError:
                 pass  # Can't read -- overwrite
 
         if needs_write:
-            bridge_path.write_text(bridge_content, encoding='utf-8')
-            if sys.platform != 'win32':
+            bridge_path.write_text(bridge_content, encoding="utf-8")
+            if sys.platform != "win32":
                 bridge_path.chmod(0o755)
         else:
-            if sys.platform != 'win32':
+            if sys.platform != "win32":
                 bridge_path.chmod(0o755)
 
         # Migrate: remove old bridge from .claude/ if it exists
-        old_bridge = target_dir / '.claude' / 'envoy-bridge.py'
+        old_bridge = target_dir / ".claude" / "envoy-bridge.py"
         if old_bridge.exists():
             try:
                 old_bridge.unlink()
-                ext._log('Migrated: removed old .claude/envoy-bridge.py')
+                ext._log("Migrated: removed old .claude/envoy-bridge.py")
             except OSError:
                 pass
 
         # Migrate: remove old files from previous locations
-        for old_name, desc in [('.envoy-tools-cache.json', 'tools cache'),
-                                ('.envoy.json', 'envoy config'),
-                                ('.embody.json', 'embody config')]:
+        for old_name, desc in [
+            (".envoy-tools-cache.json", "tools cache"),
+            (".envoy.json", "envoy config"),
+            (".embody.json", "embody config"),
+        ]:
             old_file = target_dir / old_name
             if old_file.exists():
                 try:
                     old_file.unlink()
-                    ext._log(f'Migrated: removed old {old_name} ({desc})')
+                    ext._log(f"Migrated: removed old {old_name} ({desc})")
                 except OSError:
                     pass
 
         # Prefer the venv Python (created from TD's Python) so the bridge
         # works on machines without a system Python installation.
         # Fall back to system PATH command if the venv doesn't exist yet.
-        if sys.platform == 'win32':
-            venv_python = project_dir / '.venv' / 'Scripts' / 'python.exe'
+        if sys.platform == "win32":
+            venv_python = project_dir / ".venv" / "Scripts" / "python.exe"
         else:
-            venv_python = project_dir / '.venv' / 'bin' / 'python3'
+            venv_python = project_dir / ".venv" / "bin" / "python3"
 
         if venv_python.is_file():
             # Verify the venv Python actually executes -- catches stale
@@ -147,68 +151,76 @@ def configure_mcp_client(ext, port, target_dir=None):
             # the rmtree path below and destroys a healthy venv.
             try:
                 subprocess.run(
-                    [str(venv_python), '-c',
-                     'import sys; print(sys.version)'],
-                    capture_output=True, timeout=10, check=True,
-                    stdin=subprocess.DEVNULL)
-                python_cmd = str(venv_python).replace('\\', '/')
-            except (subprocess.CalledProcessError,
-                    subprocess.TimeoutExpired, OSError) as e:
+                    [str(venv_python), "-c", "import sys; print(sys.version)"],
+                    capture_output=True,
+                    timeout=10,
+                    check=True,
+                    stdin=subprocess.DEVNULL,
+                )
+                python_cmd = str(venv_python).replace("\\", "/")
+            except (
+                subprocess.CalledProcessError,
+                subprocess.TimeoutExpired,
+                OSError,
+            ) as e:
                 if not ext._venv_recreated:
                     ext._venv_recreated = True
                     ext._log(
-                        f'Venv corrupted ({type(e).__name__}: {e}), '
-                        f'recreating...', 'WARNING')
+                        f"Venv corrupted ({type(e).__name__}: {e}), recreating...",
+                        "WARNING",
+                    )
                     import shutil
-                    shutil.rmtree(str(project_dir / '.venv'),
-                                  ignore_errors=True)
+
+                    shutil.rmtree(str(project_dir / ".venv"), ignore_errors=True)
                     op.Embody.ext.Embody._setupEnvironment()
                     # Re-check after recreation
                     if venv_python.is_file():
                         try:
                             subprocess.run(
-                                [str(venv_python), '-c',
-                                 'import sys; print(sys.version)'],
-                                capture_output=True, timeout=10,
+                                [
+                                    str(venv_python),
+                                    "-c",
+                                    "import sys; print(sys.version)",
+                                ],
+                                capture_output=True,
+                                timeout=10,
                                 check=True,
-                                stdin=subprocess.DEVNULL)
-                            python_cmd = str(venv_python).replace(
-                                '\\', '/')
-                            ext._log('Venv recreated successfully',
-                                     'SUCCESS')
+                                stdin=subprocess.DEVNULL,
+                            )
+                            python_cmd = str(venv_python).replace("\\", "/")
+                            ext._log("Venv recreated successfully", "SUCCESS")
                         except Exception as e2:
                             ext._log(
-                                f'Venv recreation failed: {e2}. '
-                                f'Using system Python.', 'ERROR')
-                            python_cmd = ('python' if sys.platform == 'win32'
-                                          else 'python3')
+                                f"Venv recreation failed: {e2}. Using system Python.",
+                                "ERROR",
+                            )
+                            python_cmd = "python" if sys.platform == "win32" else "python3"
                     else:
                         ext._log(
-                            'Venv recreation did not produce Python '
-                            'binary. Using system Python.', 'ERROR')
-                        python_cmd = ('python' if sys.platform == 'win32'
-                                      else 'python3')
+                            "Venv recreation did not produce Python binary. Using system Python.",
+                            "ERROR",
+                        )
+                        python_cmd = "python" if sys.platform == "win32" else "python3"
                 else:
                     ext._log(
-                        f'Venv Python still broken after recreation: '
-                        f'{e}. Using system Python.', 'WARNING')
-                    python_cmd = ('python' if sys.platform == 'win32'
-                                  else 'python3')
+                        f"Venv Python still broken after recreation: {e}. Using system Python.",
+                        "WARNING",
+                    )
+                    python_cmd = "python" if sys.platform == "win32" else "python3"
         else:
-            python_cmd = 'python' if sys.platform == 'win32' else 'python3'
+            python_cmd = "python" if sys.platform == "win32" else "python3"
 
         # --- Deploy the .tdn git diff driver (semantic git diffs) ---
         configure_tdn_diff_driver(ext, target_dir, python_cmd)
 
         # --- Write envoy.json project config ---
-        write_envoy_config(ext, target_dir / '.embody', port)
+        write_envoy_config(ext, target_dir / ".embody", port)
 
         # --- Write .mcp.json with STDIO transport ---
-        mcp_file = target_dir / '.mcp.json'
+        mcp_file = target_dir / ".mcp.json"
         # Use forward slashes even on Windows for JSON portability
-        bridge_abs = str(bridge_path).replace('\\', '/')
-        config_abs = str(
-            (target_dir / '.embody' / 'envoy.json')).replace('\\', '/')
+        bridge_abs = str(bridge_path).replace("\\", "/")
+        config_abs = str((target_dir / ".embody" / "envoy.json")).replace("\\", "/")
 
         # Record .mcp.json footprint: Embody manages the mcpServers.envoy
         # key. If it created the file, Uninstall may delete it; if it merged
@@ -216,9 +228,7 @@ def configure_mcp_client(ext, port, target_dir=None):
         try:
             Embody = op.Embody.ext.Embody
             if mcp_file.exists():
-                Embody._manifestRecordAppendedFile(
-                    str(target_dir), mcp_file, 'mcpServers.envoy',
-                    kind='json_key')
+                Embody._manifestRecordAppendedFile(str(target_dir), mcp_file, "mcpServers.envoy", kind="json_key")
             else:
                 Embody._manifestRecordCreatedFile(str(target_dir), mcp_file)
         except Exception:
@@ -228,68 +238,65 @@ def configure_mcp_client(ext, port, target_dir=None):
         config = {}
         if mcp_file.exists():
             try:
-                config = json.loads(mcp_file.read_text(encoding='utf-8'))
+                config = json.loads(mcp_file.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError) as e:
-                ext._log(f'Could not parse existing .mcp.json, will overwrite: {e}', 'DEBUG')
+                ext._log(f"Could not parse existing .mcp.json, will overwrite: {e}", "DEBUG")
 
-        servers = config.get('mcpServers', {})
-        existing = servers.get('envoy', {})
+        servers = config.get("mcpServers", {})
+        existing = servers.get("envoy", {})
 
         # Check if already configured with matching STDIO bridge
-        expected_args = ['-u', bridge_abs, '--port', str(port),
-                         '--config', config_abs]
-        if (existing.get('type') == 'stdio'
-                and existing.get('command') == python_cmd
-                and existing.get('args') == expected_args):
-            ext._log('MCP .mcp.json already configured (STDIO bridge)', 'DEBUG')
-            deploy_settings_local(ext, target_dir / '.claude')
+        expected_args = ["-u", bridge_abs, "--port", str(port), "--config", config_abs]
+        if (
+            existing.get("type") == "stdio"
+            and existing.get("command") == python_cmd
+            and existing.get("args") == expected_args
+        ):
+            ext._log("MCP .mcp.json already configured (STDIO bridge)", "DEBUG")
+            deploy_settings_local(ext, target_dir / ".claude")
             return
 
-        servers['envoy'] = {
-            'type': 'stdio',
-            'command': python_cmd,
-            'args': expected_args,
+        servers["envoy"] = {
+            "type": "stdio",
+            "command": python_cmd,
+            "args": expected_args,
         }
-        config['mcpServers'] = servers
+        config["mcpServers"] = servers
 
         def _write():
-            mcp_file.write_text(
-                json.dumps(config, indent=2) + '\n', encoding='utf-8')
-            ext._log(f'Wrote MCP config to {mcp_file} (STDIO bridge -> port {port})')
+            mcp_file.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+            ext._log(f"Wrote MCP config to {mcp_file} (STDIO bridge -> port {port})")
 
         # Advanced mode: confirm before writing the Envoy entry into the
         # user's .mcp.json (only reached when it is missing or out of date).
-        verb = 'add the Envoy MCP server entry to' if existing else 'create'
-        op.Embody.ext.Embody._guardFileWrite(
-            'MCP config', f'{verb} .mcp.json in {target_dir}',
-            [str(mcp_file)], _write)
+        verb = "add the Envoy MCP server entry to" if existing else "create"
+        op.Embody.ext.Embody._guardFileWrite("MCP config", f"{verb} .mcp.json in {target_dir}", [str(mcp_file)], _write)
 
         # --- Deploy settings.local.json (auto-allow read-only MCP tools) ---
-        deploy_settings_local(ext, target_dir / '.claude')
+        deploy_settings_local(ext, target_dir / ".claude")
 
     except Exception as e:
-        ext._log(f'Could not auto-configure MCP client: {e}', 'WARNING')
+        ext._log(f"Could not auto-configure MCP client: {e}", "WARNING")
 
 
 def configure_mcp_client_http(ext, target_dir, port):
     """Fallback: configure .mcp.json with direct HTTP transport.
     Used when the STDIO bridge script cannot be deployed."""
-    url = f'http://localhost:{port}/mcp'
-    mcp_file = target_dir / '.mcp.json'
+    url = f"http://localhost:{port}/mcp"
+    mcp_file = target_dir / ".mcp.json"
 
     config = {}
     if mcp_file.exists():
         try:
-            config = json.loads(mcp_file.read_text(encoding='utf-8'))
+            config = json.loads(mcp_file.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             pass
 
-    servers = config.get('mcpServers', {})
-    servers['envoy'] = {'type': 'http', 'url': url}
-    config['mcpServers'] = servers
-    mcp_file.write_text(
-        json.dumps(config, indent=2) + '\n', encoding='utf-8')
-    ext._log(f'Wrote MCP config to {mcp_file} (HTTP fallback)')
+    servers = config.get("mcpServers", {})
+    servers["envoy"] = {"type": "http", "url": url}
+    config["mcpServers"] = servers
+    mcp_file.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    ext._log(f"Wrote MCP config to {mcp_file} (HTTP fallback)")
 
 
 def registry_path(ext):
@@ -302,33 +309,34 @@ def registry_path(ext):
     the Embody extension isn't accessible (defensive).
     """
     from pathlib import Path
+
     try:
         root = op.Embody.ext.Embody._findProjectRoot()
-        return Path(root) / '.embody' / 'envoy.json'
+        return Path(root) / ".embody" / "envoy.json"
     except Exception:
-        git_root = ext.ownerComp.fetch('_git_root', 'no-git')
-        if git_root == 'no-git':
+        git_root = ext.ownerComp.fetch("_git_root", "no-git")
+        if git_root == "no-git":
             return None
-        return Path(git_root) / '.embody' / 'envoy.json'
+        return Path(git_root) / ".embody" / "envoy.json"
 
 
 def tool_permissions_posture(ext):
     """The Toolpermissions param value, defensively normalized.
     'all' | 'some' | 'prompt' | 'leave' (default 'all')."""
     try:
-        posture = (op.Embody.par.Toolpermissions.eval() or 'all').strip().lower()
+        posture = (op.Embody.par.Toolpermissions.eval() or "all").strip().lower()
     except Exception:
-        posture = 'all'
-    return posture if posture in ('all', 'some', 'prompt', 'leave') else 'all'
+        posture = "all"
+    return posture if posture in ("all", "some", "prompt", "leave") else "all"
 
 
 def temp_read_dirs(ext):
     """Directories that must be readable so a capture_top PNG (saved to the
     OS temp dir, EnvoyExt._captureTop) can be Read without a prompt. Forward
     slashes for cross-platform JSON. Always includes /tmp as a fallback."""
-    dirs = ['/tmp']
+    dirs = ["/tmp"]
     try:
-        t = tempfile.gettempdir().replace('\\', '/')
+        t = tempfile.gettempdir().replace("\\", "/")
         if t and t not in dirs:
             dirs.append(t)
     except Exception:
@@ -342,22 +350,21 @@ def load_settings_baseline(ext):
     dirs are layered on per posture by _composeSettings, so the template no
     longer needs to enumerate them."""
     try:
-        templates = ext.ownerComp.op('templates')
-        dat = templates.op('text_settings_local') if templates else None
-        if dat and (dat.text or '').strip():
+        templates = ext.ownerComp.op("templates")
+        dat = templates.op("text_settings_local") if templates else None
+        if dat and (dat.text or "").strip():
             cfg = json.loads(dat.text)
             if isinstance(cfg, dict):
                 return cfg
     except Exception as e:
-        ext._log(f'settings baseline template unreadable ({e}); '
-                 f'using built-in.', 'DEBUG')
+        ext._log(f"settings baseline template unreadable ({e}); using built-in.", "DEBUG")
     return {
-        'permissions': {
-            'allow': ['Bash', 'WebFetch'],
-            'additionalDirectories': ['/tmp'],
+        "permissions": {
+            "allow": ["Bash", "WebFetch"],
+            "additionalDirectories": ["/tmp"],
         },
-        'enabledMcpjsonServers': ['envoy'],
-        'enableAllProjectMcpServers': True,
+        "enabledMcpjsonServers": ["envoy"],
+        "enableAllProjectMcpServers": True,
     }
 
 
@@ -367,28 +374,27 @@ def compose_settings(ext, cfg, posture):
     entry; replaces only the Envoy tool entries, ensures the temp read
     dirs, and trusts the Envoy MCP server. `posture` is never 'leave'
     here (the caller short-circuits that)."""
-    perms = cfg.setdefault('permissions', {})
+    perms = cfg.setdefault("permissions", {})
     # Strip prior Envoy entries so we author them fresh for this posture.
-    allow = [a for a in perms.get('allow', [])
-             if not (a == 'mcp__envoy' or a.startswith('mcp__envoy__'))]
-    if posture == 'all':
-        allow.append('mcp__envoy')          # wildcard: all current + future tools
-    elif posture == 'some':
-        allow.extend(f'mcp__envoy__{t}' for t in ext.READ_ONLY_TOOLS)
+    allow = [a for a in perms.get("allow", []) if not (a == "mcp__envoy" or a.startswith("mcp__envoy__"))]
+    if posture == "all":
+        allow.append("mcp__envoy")  # wildcard: all current + future tools
+    elif posture == "some":
+        allow.extend(f"mcp__envoy__{t}" for t in ext.READ_ONLY_TOOLS)
     # posture == 'prompt': no Envoy entries -> every tool prompts.
-    perms['allow'] = allow
-    add = list(perms.get('additionalDirectories', []))
+    perms["allow"] = allow
+    add = list(perms.get("additionalDirectories", []))
     for d in temp_read_dirs(ext):
         if d not in add:
             add.append(d)
-    perms['additionalDirectories'] = add
-    cfg['permissions'] = perms
+    perms["additionalDirectories"] = add
+    cfg["permissions"] = perms
     # Trust the project MCP server so tools are available at all.
-    cfg['enableAllProjectMcpServers'] = True
-    servers = list(cfg.get('enabledMcpjsonServers', []))
-    if 'envoy' not in servers:
-        servers.append('envoy')
-    cfg['enabledMcpjsonServers'] = servers
+    cfg["enableAllProjectMcpServers"] = True
+    servers = list(cfg.get("enabledMcpjsonServers", []))
+    if "envoy" not in servers:
+        servers.append("envoy")
+    cfg["enabledMcpjsonServers"] = servers
     return cfg
 
 
@@ -398,22 +404,20 @@ def settings_satisfies(ext, cfg, posture):
     from list reordering."""
     if not isinstance(cfg, dict):
         return False
-    perms = cfg.get('permissions', {}) or {}
-    allow = perms.get('allow', []) or []
-    envoy = [a for a in allow
-             if a == 'mcp__envoy' or a.startswith('mcp__envoy__')]
-    add = perms.get('additionalDirectories', []) or []
+    perms = cfg.get("permissions", {}) or {}
+    allow = perms.get("allow", []) or []
+    envoy = [a for a in allow if a == "mcp__envoy" or a.startswith("mcp__envoy__")]
+    add = perms.get("additionalDirectories", []) or []
     temp_ok = all(d in add for d in temp_read_dirs(ext))
-    server_ok = (cfg.get('enableAllProjectMcpServers') is True
-                 or 'envoy' in (cfg.get('enabledMcpjsonServers') or []))
+    server_ok = cfg.get("enableAllProjectMcpServers") is True or "envoy" in (cfg.get("enabledMcpjsonServers") or [])
     if not (temp_ok and server_ok):
         return False
-    if posture == 'all':
-        return 'mcp__envoy' in envoy
-    if posture == 'prompt':
+    if posture == "all":
+        return "mcp__envoy" in envoy
+    if posture == "prompt":
         return len(envoy) == 0
-    if posture == 'some':
-        return set(envoy) == {f'mcp__envoy__{t}' for t in ext.READ_ONLY_TOOLS}
+    if posture == "some":
+        return set(envoy) == {f"mcp__envoy__{t}" for t in ext.READ_ONLY_TOOLS}
     return False
 
 
@@ -429,55 +433,64 @@ def deploy_settings_local(ext, claude_dir):
     The user is told whether the file was created or updated.
     """
     import copy
-    posture = tool_permissions_posture(ext)
-    settings_path = claude_dir / 'settings.local.json'
 
-    if posture == 'leave':
-        ext._log('Tool permissions: leaving .claude/settings.local.json '
-                 'untouched (your choice).', 'DEBUG')
+    posture = tool_permissions_posture(ext)
+    settings_path = claude_dir / "settings.local.json"
+
+    if posture == "leave":
+        ext._log(
+            "Tool permissions: leaving .claude/settings.local.json untouched (your choice).",
+            "DEBUG",
+        )
         return
 
     existed = settings_path.exists()
     existing = None
     if existed:
         try:
-            existing = json.loads(settings_path.read_text(encoding='utf-8'))
+            existing = json.loads(settings_path.read_text(encoding="utf-8"))
             if not isinstance(existing, dict):
                 existing = None
         except (json.JSONDecodeError, OSError) as e:
             # Never clobber a settings.local.json we can't parse -- it may
             # hold hand-authored user permissions.
-            ext._log(f'Could not parse existing settings.local.json '
-                     f'({e}) -- leaving it untouched.', 'WARNING')
+            ext._log(
+                f"Could not parse existing settings.local.json ({e}) -- leaving it untouched.",
+                "WARNING",
+            )
             return
 
     # Idempotent: an already-satisfying file is left exactly as-is.
     if existing is not None and settings_satisfies(ext, existing, posture):
-        ext._log(f'settings.local.json already matches tool permissions '
-                 f'({posture}) -- no change.', 'DEBUG')
+        ext._log(
+            f"settings.local.json already matches tool permissions ({posture}) -- no change.",
+            "DEBUG",
+        )
         return
 
-    base = copy.deepcopy(existing) if existing is not None \
-        else load_settings_baseline(ext)
+    base = copy.deepcopy(existing) if existing is not None else load_settings_baseline(ext)
     new_cfg = compose_settings(ext, base, posture)
-    content = json.dumps(new_cfg, indent=2) + '\n'
-    verb = 'update' if existed else 'create'
+    content = json.dumps(new_cfg, indent=2) + "\n"
+    verb = "update" if existed else "create"
 
     def _write():
         claude_dir.mkdir(parents=True, exist_ok=True)
-        settings_path.write_text(content, encoding='utf-8')
-        ext._log(f'{verb.capitalize()}d .claude/settings.local.json '
-                 f'(tool permissions: {posture}) at {settings_path}',
-                 'SUCCESS')
+        settings_path.write_text(content, encoding="utf-8")
+        ext._log(
+            f"{verb.capitalize()}d .claude/settings.local.json (tool permissions: {posture}) at {settings_path}",
+            "SUCCESS",
+        )
         try:
             Embody = op.Embody.ext.Embody
             root = str(Embody._findProjectRoot())
             if existed:  # merged into a user file -> Uninstall only reverses our unit
                 Embody._manifestRecordAppendedFile(
-                    root, settings_path,
-                    'permissions (Envoy tools + temp read dirs)',
-                    kind='json_key')
-            else:        # Embody created it -> safe to remove on Uninstall
+                    root,
+                    settings_path,
+                    "permissions (Envoy tools + temp read dirs)",
+                    kind="json_key",
+                )
+            else:  # Embody created it -> safe to remove on Uninstall
                 Embody._manifestRecordCreatedFile(root, settings_path)
         except Exception:
             pass
@@ -485,16 +498,17 @@ def deploy_settings_local(ext, claude_dir):
     # Advanced mode confirms; Auto / consented-batch apply silently. The
     # 'update' verb makes the disclosure honest about touching a user file.
     op.Embody.ext.Embody._guardFileWrite(
-        'AI config',
-        f'{verb} .claude/settings.local.json (tool permissions: {posture}) '
-        f'in {claude_dir.parent}',
+        "AI config",
+        f"{verb} .claude/settings.local.json (tool permissions: {posture}) in {claude_dir.parent}",
         [str(settings_path)],
-        _write)
+        _write,
+    )
 
 
 def find_git_root(ext):
     """Silently find the git repo root. Returns Path or 'no-git'. Never prompts."""
     from pathlib import Path
+
     project_dir = Path(project.folder).resolve()
     try:
         home_dir = Path.home().resolve()
@@ -503,17 +517,15 @@ def find_git_root(ext):
     # Only stop at home_dir when it's actually an ancestor of project_dir.
     # Otherwise (e.g. Windows project on D:\ while home is on C:\) the
     # part-count comparison wrongly bailed before searching -- issue #19.
-    home_is_ancestor = bool(
-        home_dir and (home_dir == project_dir or home_dir in project_dir.parents)
-    )
+    home_is_ancestor = bool(home_dir and (home_dir == project_dir or home_dir in project_dir.parents))
     for parent in [project_dir] + list(project_dir.parents):
         if home_is_ancestor and parent == home_dir:
             break
-        if (parent / '.git').exists():
-            ext._log(f'Found git repo at {parent}', 'INFO')
+        if (parent / ".git").exists():
+            ext._log(f"Found git repo at {parent}", "INFO")
             return parent
-    ext._log(f'No git repo found for {project_dir}', 'INFO')
-    return 'no-git'
+    ext._log(f"No git repo found for {project_dir}", "INFO")
+    return "no-git"
 
 
 def check_or_init_git_repo(ext):
@@ -532,62 +544,64 @@ def check_or_init_git_repo(ext):
     # Walk up looking for .git, but stop at the home directory only when
     # home is actually an ancestor of project_dir (issue #19 -- previously
     # the comparison broke for projects on a non-home drive on Windows).
-    home_is_ancestor = bool(
-        home_dir and (home_dir == project_dir or home_dir in project_dir.parents)
-    )
+    home_is_ancestor = bool(home_dir and (home_dir == project_dir or home_dir in project_dir.parents))
     for parent in [project_dir] + list(project_dir.parents):
         if home_is_ancestor and parent == home_dir:
             break
-        if (parent / '.git').exists():
-            ext._log(f'Found git repo at {parent}', 'INFO')
+        if (parent / ".git").exists():
+            ext._log(f"Found git repo at {parent}", "INFO")
             return parent
 
     # No git repo found between project folder and home directory.
-    ext._log(
-        f'No git repo found for {project_dir} (stopped at {home_dir})',
-        'INFO')
+    ext._log(f"No git repo found for {project_dir} (stopped at {home_dir})", "INFO")
 
     # Prompt user.
     # Guard against concurrent calls: ui.messageBox blocks the main
     # thread but TD's run() callbacks still fire, so a second Start()
     # can reach here while the first dialog is open.
-    if getattr(ext, '_git_prompt_active', False):
-        ext._log('Git prompt already active (duplicate suppressed)', 'DEBUG')
-        return 'no-git'
+    if getattr(ext, "_git_prompt_active", False):
+        ext._log("Git prompt already active (duplicate suppressed)", "DEBUG")
+        return "no-git"
     ext._git_prompt_active = True
     try:
         choice = op.Embody.ext.Embody._messageBox(
-            'Envoy -- Git Repository Recommended',
-            'A git repository is recommended for .gitignore and\n'
-            '.gitattributes management. No git repository was found.\n\n'
-            'MCP and AI client config files will be generated either way.\n\n'
-            f'Initialize a git repo in:\n  {project_dir}\n\n'
-            'Or browse to select a different folder (e.g. an existing repo root).\n'
-            'You can also run op.Embody.InitGit() later.',
-            buttons=['Cancel', 'Initialize Git Here', 'Browse for Folder', 'Start Without Git'])
+            "Envoy -- Git Repository Recommended",
+            "A git repository is recommended for .gitignore and\n"
+            ".gitattributes management. No git repository was found.\n\n"
+            "MCP and AI client config files will be generated either way.\n\n"
+            f"Initialize a git repo in:\n  {project_dir}\n\n"
+            "Or browse to select a different folder (e.g. an existing repo root).\n"
+            "You can also run op.Embody.InitGit() later.",
+            buttons=[
+                "Cancel",
+                "Initialize Git Here",
+                "Browse for Folder",
+                "Start Without Git",
+            ],
+        )
 
         if choice not in (1, 2, 3):  # Cancel or closed dialog
             ext.ownerComp.par.Envoyenable = False
-            ext._log('Envoy cancelled -- no git repository.', 'INFO')
+            ext._log("Envoy cancelled -- no git repository.", "INFO")
             return None
 
         if choice == 2:  # Browse for Folder
-            result = ui.chooseFolder(
-                title='Select Git Repository Root', start=str(project_dir))
+            result = ui.chooseFolder(title="Select Git Repository Root", start=str(project_dir))
             if not result:
                 ext.ownerComp.par.Envoyenable = False
-                ext._log('Envoy cancelled -- folder selection aborted.', 'INFO')
+                ext._log("Envoy cancelled -- folder selection aborted.", "INFO")
                 return None
             chosen = Path(result)
             # If the chosen folder already contains a .git, use it directly
-            if (chosen / '.git').exists():
-                ext._log(f'Using existing git repo at {chosen}', 'SUCCESS')
+            if (chosen / ".git").exists():
+                ext._log(f"Using existing git repo at {chosen}", "SUCCESS")
                 return chosen
             # No .git there -- offer to initialize in that folder
             init_choice = op.Embody.ext.Embody._messageBox(
-                'Envoy -- Initialize Git',
-                f'No git repo found in:\n  {chosen}\n\nInitialize git here?',
-                buttons=['Cancel', 'Initialize Git'])
+                "Envoy -- Initialize Git",
+                f"No git repo found in:\n  {chosen}\n\nInitialize git here?",
+                buttons=["Cancel", "Initialize Git"],
+            )
             if init_choice not in (1,):
                 ext.ownerComp.par.Envoyenable = False
                 return None
@@ -598,34 +612,34 @@ def check_or_init_git_repo(ext):
                 # Strip git env vars that TD's embedded Python may set --
                 # these can cause git init to produce a broken repository.
                 clean_env = {
-                    k: v for k, v in os.environ.items()
-                    if k not in (
-                        'GIT_DIR', 'GIT_WORK_TREE',
-                        'GIT_INDEX_FILE', 'GIT_CEILING_DIRECTORIES',
+                    k: v
+                    for k, v in os.environ.items()
+                    if k
+                    not in (
+                        "GIT_DIR",
+                        "GIT_WORK_TREE",
+                        "GIT_INDEX_FILE",
+                        "GIT_CEILING_DIRECTORIES",
                     )
                 }
                 git_kwargs = dict(
-                    capture_output=True, text=True,
-                    cwd=str(project_dir), env=clean_env,
+                    capture_output=True,
+                    text=True,
+                    cwd=str(project_dir),
+                    env=clean_env,
                 )
-                subprocess.run(['git', 'init'], check=True, **git_kwargs)
-                ext._log(f'Initialized git repo in {project_dir}', 'SUCCESS')
+                subprocess.run(["git", "init"], check=True, **git_kwargs)
+                ext._log(f"Initialized git repo in {project_dir}", "SUCCESS")
 
                 # Verify the init produced a working repository
-                verify = subprocess.run(
-                    ['git', 'rev-parse', '--is-inside-work-tree'],
-                    **git_kwargs)
+                verify = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], **git_kwargs)
                 if verify.returncode != 0:
-                    ext._log('Git verify failed after init -- retrying', 'WARNING')
-                    subprocess.run(['git', 'init'], check=True, **git_kwargs)
-                    verify = subprocess.run(
-                        ['git', 'rev-parse', '--is-inside-work-tree'],
-                        **git_kwargs)
+                    ext._log("Git verify failed after init -- retrying", "WARNING")
+                    subprocess.run(["git", "init"], check=True, **git_kwargs)
+                    verify = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], **git_kwargs)
                     if verify.returncode != 0:
-                        raise RuntimeError(
-                            f'git rev-parse failed after retry: '
-                            f'{verify.stderr.strip()}')
-                    ext._log('Git repo verified after retry', 'SUCCESS')
+                        raise RuntimeError(f"git rev-parse failed after retry: {verify.stderr.strip()}")
+                    ext._log("Git repo verified after retry", "SUCCESS")
 
                 # Git config files belong with git init (issue #8).
                 configure_gitignore(ext, project_dir)
@@ -633,21 +647,22 @@ def check_or_init_git_repo(ext):
 
                 return project_dir
             except Exception as e:
-                ext._log(f'Failed to initialize git repo: {e}', 'ERROR')
+                ext._log(f"Failed to initialize git repo: {e}", "ERROR")
                 op.Embody.ext.Embody._messageBox(
-                    'Envoy -- Git Initialization Failed',
-                    f'Could not initialize a git repository:\n\n  {e}\n\n'
-                    'Envoy will start without git. MCP and AI client\n'
-                    'config will be generated in the project folder.\n'
-                    '.gitignore and .gitattributes will be skipped.\n\n'
+                    "Envoy -- Git Initialization Failed",
+                    f"Could not initialize a git repository:\n\n  {e}\n\n"
+                    "Envoy will start without git. MCP and AI client\n"
+                    "config will be generated in the project folder.\n"
+                    ".gitignore and .gitattributes will be skipped.\n\n"
                     'To add git later: run "git init" manually, then\n'
-                    'call op.Embody.InitGit() from the textport.',
-                    buttons=['OK'])
+                    "call op.Embody.InitGit() from the textport.",
+                    buttons=["OK"],
+                )
                 # Fall through to start-without-git
 
         # choice == 3 or git init failed -- start without git
-        ext._log('Starting Envoy without git repo -- auto-config skipped.', 'WARNING')
-        return 'no-git'
+        ext._log("Starting Envoy without git repo -- auto-config skipped.", "WARNING")
+        return "no-git"
     finally:
         ext._git_prompt_active = False
 
@@ -657,16 +672,18 @@ def atomic_write_json(path, data):
     Retries on PermissionError (Windows file-in-use)."""
     import os
     from pathlib import Path
-    tmp = Path(str(path) + '.tmp')
-    content = json.dumps(data, indent=2) + '\n'
+
+    tmp = Path(str(path) + ".tmp")
+    content = json.dumps(data, indent=2) + "\n"
     for attempt in range(3):
         try:
-            tmp.write_text(content, encoding='utf-8')
+            tmp.write_text(content, encoding="utf-8")
             os.replace(str(tmp), str(path))
             return
         except PermissionError:
             if attempt < 2:
                 import time as _time
+
                 _time.sleep(0.1)
             else:
                 raise
@@ -703,25 +720,24 @@ def instance_key(ext, toe_rel: str, existing_instances: dict) -> str:
     # If the toe_path has changed, fall through and compute a new
     # key from the current basename -- caller prunes the stale row.
     for key, info in existing_instances.items():
-        if (info.get('td_pid') == my_pid
-                and info.get('toe_path') == toe_rel):
+        if info.get("td_pid") == my_pid and info.get("toe_path") == toe_rel:
             return key
 
     # Check if base key is free, held by a dead process, or held
     # by our own previous (now-stale) registration.
     if base not in existing_instances:
         return base
-    existing_pid = existing_instances[base].get('td_pid', 0)
+    existing_pid = existing_instances[base].get("td_pid", 0)
     if not ext._isPidAlive(existing_pid) or existing_pid == my_pid:
         return base
 
     # Base key is held by a live foreign process -- find a unique suffix
     suffix = 2
     while True:
-        candidate = f'{base}-{suffix}'
+        candidate = f"{base}-{suffix}"
         if candidate not in existing_instances:
             return candidate
-        existing_pid = existing_instances[candidate].get('td_pid', 0)
+        existing_pid = existing_instances[candidate].get("td_pid", 0)
         if not ext._isPidAlive(existing_pid) or existing_pid == my_pid:
             return candidate
         suffix += 1
@@ -747,9 +763,10 @@ def is_pid_alive(pid):
     """
     if not isinstance(pid, int) or pid <= 0:
         return False
-    if sys.platform == 'win32':
+    if sys.platform == "win32":
         try:
             import ctypes
+
             kernel32 = ctypes.windll.kernel32
             SYNCHRONIZE = 0x00100000
             handle = kernel32.OpenProcess(SYNCHRONIZE, False, pid)
@@ -764,6 +781,7 @@ def is_pid_alive(pid):
     # registry that's been corrupted with a giant value would
     # otherwise propagate the overflow up through _writeEnvoyConfig.
     import os
+
     try:
         os.kill(pid, 0)
         return True
@@ -798,65 +816,63 @@ def write_envoy_config(ext, embody_dir, port):
     from pathlib import Path
 
     embody_dir.mkdir(parents=True, exist_ok=True)
-    config_path = embody_dir / 'envoy.json'
+    config_path = embody_dir / "envoy.json"
     # git_root is embody_dir's parent
     git_root = embody_dir.parent
 
     # Compute toe_path relative to git root
     project_dir = Path(project.folder)
     name = project.name
-    toe_file = project_dir / (name if name.endswith('.toe') else name + '.toe')
+    toe_file = project_dir / (name if name.endswith(".toe") else name + ".toe")
     try:
-        toe_rel = str(toe_file.relative_to(git_root)).replace('\\', '/')
+        toe_rel = str(toe_file.relative_to(git_root)).replace("\\", "/")
     except ValueError:
-        toe_rel = str(toe_file).replace('\\', '/')
+        toe_rel = str(toe_file).replace("\\", "/")
 
     # Derive TD executable path from app.binFolder
     bin_folder = Path(_td.app.binFolder)
-    if sys.platform == 'darwin':
+    if sys.platform == "darwin":
         td_executable = str(bin_folder.parent.parent)
-    elif sys.platform == 'win32':
-        exe = bin_folder / 'TouchDesigner.exe'
+    elif sys.platform == "win32":
+        exe = bin_folder / "TouchDesigner.exe"
         if not exe.exists():
-            exe = bin_folder / 'TouchDesigner099.exe'
-        td_executable = str(exe).replace('\\', '/')
+            exe = bin_folder / "TouchDesigner099.exe"
+        td_executable = str(exe).replace("\\", "/")
     else:
-        td_executable = str(bin_folder / 'TouchDesigner')
+        td_executable = str(bin_folder / "TouchDesigner")
 
     # Read existing config (migrate from old root-level .envoy.json)
     existing = {}
     if config_path.exists():
         try:
-            existing = json.loads(
-                config_path.read_text(encoding='utf-8'))
+            existing = json.loads(config_path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             pass
-    elif (git_root / '.envoy.json').exists():
+    elif (git_root / ".envoy.json").exists():
         try:
-            existing = json.loads(
-                (git_root / '.envoy.json').read_text(encoding='utf-8'))
-            ext._log('Migrated: seeded envoy.json from old .envoy.json')
+            existing = json.loads((git_root / ".envoy.json").read_text(encoding="utf-8"))
+            ext._log("Migrated: seeded envoy.json from old .envoy.json")
         except (json.JSONDecodeError, OSError):
             pass
 
     # Migrate old flat format -> registry format
-    if 'instances' not in existing:
+    if "instances" not in existing:
         instances = {}
-        if 'toe_path' in existing:
+        if "toe_path" in existing:
             # Wrap old flat config as a single instance
-            old_key = Path(existing['toe_path']).stem
+            old_key = Path(existing["toe_path"]).stem
             instances[old_key] = {
-                'toe_path': existing.get('toe_path', ''),
-                'port': existing.get('port', port),
-                'td_pid': existing.get('td_pid', 0),
+                "toe_path": existing.get("toe_path", ""),
+                "port": existing.get("port", port),
+                "td_pid": existing.get("td_pid", 0),
             }
         existing = {
-            'active': existing.get('active', ''),
-            'td_executable': existing.get('td_executable', td_executable),
-            'instances': instances,
+            "active": existing.get("active", ""),
+            "td_executable": existing.get("td_executable", td_executable),
+            "instances": instances,
         }
 
-    instances = existing.get('instances', {})
+    instances = existing.get("instances", {})
     key = instance_key(ext, toe_rel, instances)
     my_pid = os.getpid()
 
@@ -866,50 +882,45 @@ def write_envoy_config(ext, embody_dir, port):
     # and Cmd+Q-without-Envoy-stop all leave dead rows behind that
     # accumulate across sessions. Running this on every registry
     # write keeps the file bounded.
-    dead_keys = [
-        k for k, info in list(instances.items())
-        if not ext._isPidAlive(info.get('td_pid', 0))
-    ]
+    dead_keys = [k for k, info in list(instances.items()) if not ext._isPidAlive(info.get("td_pid", 0))]
     for dead_key in dead_keys:
         del instances[dead_key]
     if dead_keys:
         ext._log(
-            f'Pruned {len(dead_keys)} dead registry '
-            f'{"row" if len(dead_keys) == 1 else "rows"}: '
-            f'{", ".join(repr(k) for k in dead_keys)}', 'DEBUG')
+            f"Pruned {len(dead_keys)} dead registry "
+            f"{'row' if len(dead_keys) == 1 else 'rows'}: "
+            f"{', '.join(repr(k) for k in dead_keys)}",
+            "DEBUG",
+        )
 
     # Prune stale entries under different keys for the same PID
     # (left over from a prior toe rename, e.g. TD's save-time
     # version bump). Keeps the registry walking forward instead of
     # accumulating dead aliases.
-    stale_keys = [
-        k for k, info in list(instances.items())
-        if info.get('td_pid') == my_pid and k != key
-    ]
+    stale_keys = [k for k, info in list(instances.items()) if info.get("td_pid") == my_pid and k != key]
     for stale_key in stale_keys:
         del instances[stale_key]
         ext._log(
-            f'Pruned stale registry key "{stale_key}" '
-            f'(PID {my_pid} now registered as "{key}")', 'DEBUG')
+            f'Pruned stale registry key "{stale_key}" (PID {my_pid} now registered as "{key}")',
+            "DEBUG",
+        )
 
     # Build this instance's entry
     new_entry = {
-        'toe_path': toe_rel,
-        'port': port,
-        'td_pid': my_pid,
+        "toe_path": toe_rel,
+        "port": port,
+        "td_pid": my_pid,
     }
 
     # Check if already up-to-date (no stale prune happened either)
-    if (not stale_keys
-            and instances.get(key) == new_entry
-            and existing.get('active') == key):
-        ext._log('envoy.json already up to date', 'DEBUG')
+    if not stale_keys and instances.get(key) == new_entry and existing.get("active") == key:
+        ext._log("envoy.json already up to date", "DEBUG")
         return
 
     instances[key] = new_entry
-    existing['instances'] = instances
-    existing['active'] = key
-    existing['td_executable'] = td_executable
+    existing["instances"] = instances
+    existing["active"] = key
+    existing["td_executable"] = td_executable
 
     ext._atomicWriteJSON(config_path, existing)
     ext._log(f'Registered instance "{key}" in envoy.json (port {port})')
@@ -933,15 +944,15 @@ def refresh_registry(ext):
         return
 
     try:
-        existing = json.loads(config_path.read_text(encoding='utf-8'))
+        existing = json.loads(config_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return
 
     my_pid = os.getpid()
     port = 0
-    for info in existing.get('instances', {}).values():
-        if info.get('td_pid') == my_pid:
-            port = info.get('port', 0)
+    for info in existing.get("instances", {}).values():
+        if info.get("td_pid") == my_pid:
+            port = info.get("port", 0)
             break
     if not port:
         # We aren't in the registry yet (Envoy may have only just
@@ -951,7 +962,7 @@ def refresh_registry(ext):
     try:
         write_envoy_config(ext, config_path.parent, port)
     except Exception as e:
-        ext._log(f'RefreshRegistry failed: {e}', 'WARNING')
+        ext._log(f"RefreshRegistry failed: {e}", "WARNING")
 
 
 def remove_from_registry(ext, git_root=None):
@@ -965,17 +976,17 @@ def remove_from_registry(ext, git_root=None):
     from pathlib import Path
 
     config_path = ext._registryPath()
-    if config_path is None and git_root is not None and git_root != 'no-git':
-        config_path = Path(git_root) / '.embody' / 'envoy.json'
+    if config_path is None and git_root is not None and git_root != "no-git":
+        config_path = Path(git_root) / ".embody" / "envoy.json"
     if config_path is None or not config_path.exists():
         return
 
     try:
-        config = json.loads(config_path.read_text(encoding='utf-8'))
+        config = json.loads(config_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return
 
-    instances = config.get('instances', {})
+    instances = config.get("instances", {})
     if not instances:
         return
 
@@ -983,7 +994,7 @@ def remove_from_registry(ext, git_root=None):
     my_pid = os.getpid()
     my_key = None
     for key, info in instances.items():
-        if info.get('td_pid') == my_pid:
+        if info.get("td_pid") == my_pid:
             my_key = key
             break
 
@@ -991,18 +1002,18 @@ def remove_from_registry(ext, git_root=None):
         return
 
     del instances[my_key]
-    config['instances'] = instances
+    config["instances"] = instances
 
     # If we were active, switch to first remaining instance (or null)
-    if config.get('active') == my_key:
+    if config.get("active") == my_key:
         remaining = list(instances.keys())
-        config['active'] = remaining[0] if remaining else None
+        config["active"] = remaining[0] if remaining else None
 
     try:
         ext._atomicWriteJSON(config_path, config)
         ext._log(f'Deregistered instance "{my_key}" from envoy.json')
     except Exception as e:
-        ext._log(f'Could not deregister from envoy.json: {e}', 'WARNING')
+        ext._log(f"Could not deregister from envoy.json: {e}", "WARNING")
 
 
 def configure_gitignore(ext, git_root):
@@ -1012,87 +1023,87 @@ def configure_gitignore(ext, git_root):
     Migrates old `.claude/` blanket entry to specific entries."""
     MANAGED_ENTRIES = [
         # TouchDesigner project
-        'Backup/',
-        'logs/',
-        'CrashAutoSave*',
+        "Backup/",
+        "logs/",
+        "CrashAutoSave*",
         # Embody / Envoy
-        '.venv/',
-        '.mcp.json',
+        ".venv/",
+        ".mcp.json",
         # Ignore .embody/ runtime files but keep committed project.json
-        '.embody/*',
-        '!.embody/project.json',
-        '.claude/settings.local.json',
-        '.claude/projects/',
-        '__pycache__/',
-        '.DS_Store',
+        ".embody/*",
+        "!.embody/project.json",
+        ".claude/settings.local.json",
+        ".claude/projects/",
+        "__pycache__/",
+        ".DS_Store",
     ]
 
     try:
-        gitignore = git_root / '.gitignore'
+        gitignore = git_root / ".gitignore"
 
-        existing_content = ''
+        existing_content = ""
         existing_lines = []
         if gitignore.exists():
-            existing_content = gitignore.read_text(encoding='utf-8')
+            existing_content = gitignore.read_text(encoding="utf-8")
             existing_lines = existing_content.splitlines()
 
         # Migrate: remove stale entries from older Embody versions.
         # NOTE: .envoy-tools-cache.json is intentionally kept gitignored
         # (v5.0.356+) because a root-level cache can still be written
         # by legacy paths; we don't want to accidentally commit it.
-        STALE_ENTRIES = {'.claude/', '.claude/envoy-bridge.py',
-                         '.envoy.json', '.embody.json',
-                         '.embody/envoy-bridge.py',
-                         '.embody/envoy-tools-cache.json',
-                         # v5.0.387: replaced by '.embody/*' + '!.embody/project.json'
-                         # so .embody/project.json (committed td_build pin) is tracked.
-                         '.embody/'}
+        STALE_ENTRIES = {
+            ".claude/",
+            ".claude/envoy-bridge.py",
+            ".envoy.json",
+            ".embody.json",
+            ".embody/envoy-bridge.py",
+            ".embody/envoy-tools-cache.json",
+            # v5.0.387: replaced by '.embody/*' + '!.embody/project.json'
+            # so .embody/project.json (committed td_build pin) is tracked.
+            ".embody/",
+        }
         existing_stripped = {line.strip() for line in existing_lines}
         found_stale = STALE_ENTRIES & existing_stripped
         if found_stale:
-            existing_lines = [
-                line for line in existing_lines
-                if line.strip() not in STALE_ENTRIES
-            ]
-            existing_content = '\n'.join(existing_lines)
-            if existing_content and not existing_content.endswith('\n'):
-                existing_content += '\n'
-            ext._log(f'Migrated .gitignore: removed stale entries {found_stale}')
+            existing_lines = [line for line in existing_lines if line.strip() not in STALE_ENTRIES]
+            existing_content = "\n".join(existing_lines)
+            if existing_content and not existing_content.endswith("\n"):
+                existing_content += "\n"
+            ext._log(f"Migrated .gitignore: removed stale entries {found_stale}")
 
         existing_stripped = {line.strip() for line in existing_lines}
         missing = [e for e in MANAGED_ENTRIES if e not in existing_stripped]
 
         if not missing:
-            ext._log('.gitignore already configured', 'DEBUG')
+            ext._log(".gitignore already configured", "DEBUG")
             return
 
-        block = '\n# Embody / Envoy (auto-managed)\n'
-        block += '\n'.join(missing) + '\n'
+        block = "\n# Embody / Envoy (auto-managed)\n"
+        block += "\n".join(missing) + "\n"
 
-        if existing_content and not existing_content.endswith('\n'):
-            block = '\n' + block
+        if existing_content and not existing_content.endswith("\n"):
+            block = "\n" + block
 
         def _write():
-            gitignore.write_text(existing_content + block, encoding='utf-8')
-            ext._log(f'Added {len(missing)} entries to .gitignore: {", ".join(missing)}')
+            gitignore.write_text(existing_content + block, encoding="utf-8")
+            ext._log(f"Added {len(missing)} entries to .gitignore: {', '.join(missing)}")
             try:  # record the marked block so Uninstall strips only it (never the user's file)
                 Embody = op.Embody.ext.Embody
-                Embody._manifestRecordAppendedFile(
-                    str(Embody._findProjectRoot()), gitignore, '# Embody / Envoy')
+                Embody._manifestRecordAppendedFile(str(Embody._findProjectRoot()), gitignore, "# Embody / Envoy")
             except Exception:
                 pass
 
         # Advanced mode: confirm before editing the user's .gitignore. Only
         # reached when entries are actually missing, so a no-op never prompts.
         op.Embody.ext.Embody._guardFileWrite(
-            'Git config',
-            f'add {len(missing)} entr{"y" if len(missing) == 1 else "ies"} to '
-            f'.gitignore in {git_root}',
+            "Git config",
+            f"add {len(missing)} entr{'y' if len(missing) == 1 else 'ies'} to .gitignore in {git_root}",
             list(missing),
-            _write)
+            _write,
+        )
 
     except Exception as e:
-        ext._log(f'Could not auto-configure .gitignore: {e}', 'WARNING')
+        ext._log(f"Could not auto-configure .gitignore: {e}", "WARNING")
 
 
 def configure_gitattributes(ext, git_root):
@@ -1106,60 +1117,56 @@ def configure_gitattributes(ext, git_root):
     Idempotent -- migrates an existing managed block that predates the
     diff driver."""
     MANAGED_BLOCK = (
-        '\n# Embody / Envoy -- normalize TD line endings (auto-managed)\n'
-        '*.py text eol=lf\n'
-        '*.md text eol=lf\n'
-        '*.tdn text eol=lf diff=tdn\n'
-        '*.json text eol=lf\n'
-        '*.tsv text eol=lf\n'
-        '*.xml text eol=lf\n'
-        '*.toe binary\n'
-        '*.tox binary\n'
+        "\n# Embody / Envoy -- normalize TD line endings (auto-managed)\n"
+        "*.py text eol=lf\n"
+        "*.md text eol=lf\n"
+        "*.tdn text eol=lf diff=tdn\n"
+        "*.json text eol=lf\n"
+        "*.tsv text eol=lf\n"
+        "*.xml text eol=lf\n"
+        "*.toe binary\n"
+        "*.tox binary\n"
     )
-    MARKER = 'Embody / Envoy'
+    MARKER = "Embody / Envoy"
 
     try:
-        gitattr = git_root / '.gitattributes'
-        existing = ''
+        gitattr = git_root / ".gitattributes"
+        existing = ""
         if gitattr.exists():
-            existing = gitattr.read_text(encoding='utf-8')
+            existing = gitattr.read_text(encoding="utf-8")
 
         if MARKER in existing:
             # Migrate a managed block that predates the .tdn diff driver.
-            if ('*.tdn text eol=lf diff=tdn' not in existing
-                    and '*.tdn text eol=lf' in existing):
-                existing = existing.replace(
-                    '*.tdn text eol=lf', '*.tdn text eol=lf diff=tdn')
-                gitattr.write_text(existing, encoding='utf-8')
-                ext._log(
-                    'Migrated .gitattributes: enabled .tdn semantic diff')
+            if "*.tdn text eol=lf diff=tdn" not in existing and "*.tdn text eol=lf" in existing:
+                existing = existing.replace("*.tdn text eol=lf", "*.tdn text eol=lf diff=tdn")
+                gitattr.write_text(existing, encoding="utf-8")
+                ext._log("Migrated .gitattributes: enabled .tdn semantic diff")
             else:
-                ext._log('.gitattributes already configured', 'DEBUG')
+                ext._log(".gitattributes already configured", "DEBUG")
             return
 
-        if existing and not existing.endswith('\n'):
-            existing += '\n'
+        if existing and not existing.endswith("\n"):
+            existing += "\n"
 
         def _write():
-            gitattr.write_text(existing + MANAGED_BLOCK, encoding='utf-8')
-            ext._log('Added line-ending normalization to .gitattributes')
+            gitattr.write_text(existing + MANAGED_BLOCK, encoding="utf-8")
+            ext._log("Added line-ending normalization to .gitattributes")
             try:  # record the marked block so Uninstall strips only it (never the user's file)
                 Embody = op.Embody.ext.Embody
-                Embody._manifestRecordAppendedFile(
-                    str(Embody._findProjectRoot()), gitattr, MARKER)
+                Embody._manifestRecordAppendedFile(str(Embody._findProjectRoot()), gitattr, MARKER)
             except Exception:
                 pass
 
         # Advanced mode: confirm before editing the user's .gitattributes.
         op.Embody.ext.Embody._guardFileWrite(
-            'Git config',
-            f'add line-ending + .tdn-diff rules to .gitattributes in {git_root}',
-            [ln for ln in MANAGED_BLOCK.strip().splitlines()
-             if ln and not ln.startswith('#')],
-            _write)
+            "Git config",
+            f"add line-ending + .tdn-diff rules to .gitattributes in {git_root}",
+            [ln for ln in MANAGED_BLOCK.strip().splitlines() if ln and not ln.startswith("#")],
+            _write,
+        )
 
     except Exception as e:
-        ext._log(f'Could not auto-configure .gitattributes: {e}', 'WARNING')
+        ext._log(f"Could not auto-configure .gitattributes: {e}", "WARNING")
 
 
 def configure_tdn_diff_driver(ext, target_dir, python_cmd):
@@ -1174,73 +1181,78 @@ def configure_tdn_diff_driver(ext, target_dir, python_cmd):
     defined by a cloned repo), so Embody configures it the same way it
     manages .gitignore/.gitattributes/.mcp.json. Idempotent."""
     from pathlib import Path
+
     try:
         target_dir = Path(target_dir)
-        embody_dir = target_dir / '.embody'
+        embody_dir = target_dir / ".embody"
         embody_dir.mkdir(parents=True, exist_ok=True)
-        script_path = embody_dir / 'tdn_textconv.py'
+        script_path = embody_dir / "tdn_textconv.py"
 
         # Source from the templates textDAT, else the dev/embody fallback.
         content = None
         try:
-            templates = ext.ownerComp.op('templates')
-            dat = templates.op('text_tdn_textconv') if templates else None
+            templates = ext.ownerComp.op("templates")
+            dat = templates.op("text_tdn_textconv") if templates else None
             if dat:
                 content = dat.text
         except Exception:
             pass
         if not content:
-            source = Path(project.folder) / 'embody' / 'tdn_textconv.py'
+            source = Path(project.folder) / "embody" / "tdn_textconv.py"
             if source.exists():
-                content = source.read_text(encoding='utf-8')
+                content = source.read_text(encoding="utf-8")
         if not content:
-            ext._log(
-                'tdn_textconv source not found -- skipping .tdn diff driver',
-                'DEBUG')
+            ext._log("tdn_textconv source not found -- skipping .tdn diff driver", "DEBUG")
             return
 
         # Write only if changed, to avoid touching mtime needlessly.
-        if not (script_path.exists()
-                and script_path.read_text(encoding='utf-8') == content):
-            script_path.write_text(content, encoding='utf-8')
+        if not (script_path.exists() and script_path.read_text(encoding="utf-8") == content):
+            script_path.write_text(content, encoding="utf-8")
 
         # Register the driver in the repo's git config (idempotent).
-        script_str = str(script_path).replace('\\', '/')
+        script_str = str(script_path).replace("\\", "/")
         driver = '"%s" "%s"' % (python_cmd, script_str)
-        git_kwargs = dict(cwd=str(target_dir), capture_output=True,
-                          text=True, timeout=10,
-                          stdin=subprocess.DEVNULL)
-        current = subprocess.run(
-            ['git', 'config', '--get', 'diff.tdn.textconv'], **git_kwargs)
-        if (current.stdout or '').strip() != driver:
+        git_kwargs = dict(
+            cwd=str(target_dir),
+            capture_output=True,
+            text=True,
+            timeout=10,
+            stdin=subprocess.DEVNULL,
+        )
+        current = subprocess.run(["git", "config", "--get", "diff.tdn.textconv"], **git_kwargs)
+        if (current.stdout or "").strip() != driver:
+
             def _write():
                 subprocess.run(
-                    ['git', 'config', 'diff.tdn.textconv', driver],
-                    check=True, **git_kwargs)
+                    ["git", "config", "diff.tdn.textconv", driver],
+                    check=True,
+                    **git_kwargs,
+                )
                 subprocess.run(
-                    ['git', 'config', 'diff.tdn.cachetextconv', 'false'],
-                    check=True, **git_kwargs)
-                ext._log('Configured git diff driver for .tdn (semantic diffs)')
+                    ["git", "config", "diff.tdn.cachetextconv", "false"],
+                    check=True,
+                    **git_kwargs,
+                )
+                ext._log("Configured git diff driver for .tdn (semantic diffs)")
                 try:  # record so Uninstall un-sets the repo git config
                     op.Embody.ext.Embody._manifestRecordGitConfig(
-                        str(target_dir),
-                        ['diff.tdn.textconv', 'diff.tdn.cachetextconv'])
+                        str(target_dir), ["diff.tdn.textconv", "diff.tdn.cachetextconv"]
+                    )
                 except Exception:
                     pass
 
             # Advanced: confirm before mutating the repo's .git/config.
             op.Embody.ext.Embody._guardFileWrite(
-                'Git config',
-                f'register the .tdn semantic-diff driver in '
-                f'{target_dir}/.git/config',
-                ['git config diff.tdn.textconv',
-                 'git config diff.tdn.cachetextconv'],
-                _write)
+                "Git config",
+                f"register the .tdn semantic-diff driver in {target_dir}/.git/config",
+                ["git config diff.tdn.textconv", "git config diff.tdn.cachetextconv"],
+                _write,
+            )
 
     except (subprocess.SubprocessError, OSError) as e:
-        ext._log(f'Could not configure .tdn git diff driver: {e}', 'DEBUG')
+        ext._log(f"Could not configure .tdn git diff driver: {e}", "DEBUG")
     except Exception as e:
-        ext._log(f'Could not deploy tdn_textconv: {e}', 'WARNING')
+        ext._log(f"Could not deploy tdn_textconv: {e}", "WARNING")
 
 
 def cleanup_temp_files(ext):
@@ -1250,9 +1262,11 @@ def cleanup_temp_files(ext):
     import os
 
     tmp = tempfile.gettempdir()
-    patterns = [os.path.join(tmp, 'envoy_capture_*'),
-                os.path.join(tmp, 'envoy_query_network_*'),
-                os.path.join(tmp, 'envoy_get_op_*')]
+    patterns = [
+        os.path.join(tmp, "envoy_capture_*"),
+        os.path.join(tmp, "envoy_query_network_*"),
+        os.path.join(tmp, "envoy_get_op_*"),
+    ]
     cutoff = time.time() - 86400  # 24 hours ago
     removed = 0
     for pattern in patterns:
@@ -1264,4 +1278,4 @@ def cleanup_temp_files(ext):
             except OSError:
                 pass
     if removed:
-        ext._log(f'Cleaned up {removed} stale Envoy temp file(s)', 'DEBUG')
+        ext._log(f"Cleaned up {removed} stale Envoy temp file(s)", "DEBUG")

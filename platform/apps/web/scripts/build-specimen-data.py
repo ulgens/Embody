@@ -29,9 +29,9 @@ from pathlib import Path
 import yaml
 
 # --- Paths -------------------------------------------------------------------
-SCRIPT_DIR = Path(__file__).resolve().parent          # apps/web/scripts
-WEB_DIR = SCRIPT_DIR.parent                            # apps/web
-REPO_ROOT = WEB_DIR.parents[2]                         # apps/web -> apps -> platform -> repo
+SCRIPT_DIR = Path(__file__).resolve().parent  # apps/web/scripts
+WEB_DIR = SCRIPT_DIR.parent  # apps/web
+REPO_ROOT = WEB_DIR.parents[2]  # apps/web -> apps -> platform -> repo
 SPECIMENS_DIR = REPO_ROOT / "specimens"
 MANIFEST_PATH = SPECIMENS_DIR / "manifest.json"
 
@@ -183,36 +183,30 @@ def main() -> int:
         parsed = yaml.safe_load(raw_bytes.decode("utf-8"))
         graphs[slug] = build_graph(parsed)
 
-        rows.append(
-            {
-                "slug": slug,
-                "name": spec["name"],
-                "description": spec["description"],
-                "category": spec["category"],
-                "difficulty": spec["difficulty"],
-                # requires is a JSON array in D1 (post-0009_requires_multi). Keep
-                # it a clean list here; the legacy scalar 'none'/'' -> []. The SQL
-                # emitter json.dumps it so json_each(requires) never sees invalid
-                # JSON (which crashed the collection facet query).
-                "requires": [
-                    x
-                    for x in (
-                        spec.get("requires")
-                        if isinstance(spec.get("requires"), list)
-                        else [spec.get("requires")]
-                    )
-                    if x and x != "none"
-                ],
-                "op_count": spec["operator_count"],
-                "family_summary": family_summary(spec.get("key_ops", [])),
-                "license": spec.get("license", "CC-BY-4.0"),
-                "tags": spec.get("tags", []),
-                "key_ops": spec.get("key_ops", []),
-                "sha256": sha256,
-                "size": size,
-                "tdn_path": str(tdn_path),
-            }
-        )
+        rows.append({
+            "slug": slug,
+            "name": spec["name"],
+            "description": spec["description"],
+            "category": spec["category"],
+            "difficulty": spec["difficulty"],
+            # requires is a JSON array in D1 (post-0009_requires_multi). Keep
+            # it a clean list here; the legacy scalar 'none'/'' -> []. The SQL
+            # emitter json.dumps it so json_each(requires) never sees invalid
+            # JSON (which crashed the collection facet query).
+            "requires": [
+                x
+                for x in (spec.get("requires") if isinstance(spec.get("requires"), list) else [spec.get("requires")])
+                if x and x != "none"
+            ],
+            "op_count": spec["operator_count"],
+            "family_summary": family_summary(spec.get("key_ops", [])),
+            "license": spec.get("license", "CC-BY-4.0"),
+            "tags": spec.get("tags", []),
+            "key_ops": spec.get("key_ops", []),
+            "sha256": sha256,
+            "size": size,
+            "tdn_path": str(tdn_path),
+        })
 
     write_seed_sql(rows)
     write_graphs_ts(rows, graphs)
@@ -241,7 +235,9 @@ def write_seed_sql(rows: list[dict]) -> None:
     a("-- Handle is 'envoy' so the public user page resolves at /u/envoy and")
     a("-- matches the fallback author_handle in src/lib/specimenFallback.ts.")
     a("INSERT OR REPLACE INTO users_profile (id, handle, avatar_url, bio, trust_level)")
-    a(f"VALUES ('dev-user', '{AUTHOR_HANDLE}', '{AUTHOR_AVATAR_URL}', 'First-party Embody specimen author. Curating the transparent TDN Collection.', 'curator');")
+    a(
+        f"VALUES ('dev-user', '{AUTHOR_HANDLE}', '{AUTHOR_AVATAR_URL}', 'First-party Embody specimen author. Curating the transparent TDN Collection.', 'curator');"
+    )
     a("")
 
     # specimens_fts is a contentless FTS5 mirror. Recreate it in migration 0005's
@@ -264,24 +260,15 @@ def write_seed_sql(rows: list[dict]) -> None:
         "DELETE FROM scans WHERE version_id IN (SELECT v.id FROM specimen_versions v "
         f"JOIN specimens s ON s.id = v.specimen_id WHERE s.slug IN ({slug_list}));"
     )
-    a(
-        "DELETE FROM specimen_tags WHERE specimen_id IN "
-        f"(SELECT id FROM specimens WHERE slug IN ({slug_list}));"
-    )
-    a(
-        "DELETE FROM specimen_versions WHERE specimen_id IN "
-        f"(SELECT id FROM specimens WHERE slug IN ({slug_list}));"
-    )
+    a(f"DELETE FROM specimen_tags WHERE specimen_id IN (SELECT id FROM specimens WHERE slug IN ({slug_list}));")
+    a(f"DELETE FROM specimen_versions WHERE specimen_id IN (SELECT id FROM specimens WHERE slug IN ({slug_list}));")
     a(f"DELETE FROM specimens WHERE slug IN ({slug_list});")
     a("")
     # Also purge any row whose deterministic id we are about to (re)insert, so a
     # re-run is clean even if a previous version of this seed left rows behind.
     real_sp_ids = ", ".join(sql_str(f"sp-{r['slug']}") for r in rows)
     a("-- Purge any prior copy of these real specimens (clean re-run).")
-    a(
-        "DELETE FROM scans WHERE version_id IN (SELECT id FROM specimen_versions "
-        f"WHERE specimen_id IN ({real_sp_ids}));"
-    )
+    a(f"DELETE FROM scans WHERE version_id IN (SELECT id FROM specimen_versions WHERE specimen_id IN ({real_sp_ids}));")
     a(f"DELETE FROM specimen_tags WHERE specimen_id IN ({real_sp_ids});")
     a(f"DELETE FROM specimen_versions WHERE specimen_id IN ({real_sp_ids});")
     a(f"DELETE FROM specimens WHERE id IN ({real_sp_ids});")
@@ -295,9 +282,7 @@ def write_seed_sql(rows: list[dict]) -> None:
             if tag not in seen_tags:
                 seen_tags[tag] = tag
     a("INSERT OR REPLACE INTO tags (id, name, slug) VALUES")
-    tag_values = [
-        f"  ({sql_str('tag-' + t)}, {sql_str(t)}, {sql_str(t)})" for t in seen_tags
-    ]
+    tag_values = [f"  ({sql_str('tag-' + t)}, {sql_str(t)}, {sql_str(t)})" for t in seen_tags]
     a(",\n".join(tag_values) + ";")
     a("")
 
@@ -389,10 +374,7 @@ def write_seed_sql(rows: list[dict]) -> None:
     for r in rows:
         tags_joined = " ".join(r["tags"])
         dat_text = " ".join(r["key_ops"])
-        a(
-            "INSERT OR REPLACE INTO specimens_fts "
-            "(rowid, slug, title, description, tags, author_handle, dat_text)"
-        )
+        a("INSERT OR REPLACE INTO specimens_fts (rowid, slug, title, description, tags, author_handle, dat_text)")
         a(
             f"SELECT rowid, {sql_str(r['slug'])}, {sql_str(r['name'])}, "
             f"{sql_str(r['description'])}, {sql_str(tags_joined)}, '{AUTHOR_HANDLE}', {sql_str(dat_text)}"
@@ -432,9 +414,7 @@ def write_graphs_ts(rows: list[dict], graphs: dict) -> None:
         + ";"
     )
     body_parts.append("")
-    body_parts.append(
-        "export function specimenGraph(slug: string): Record<string, unknown> | undefined {"
-    )
+    body_parts.append("export function specimenGraph(slug: string): Record<string, unknown> | undefined {")
     body_parts.append("  return specimenGraphs[slug];")
     body_parts.append("}")
     body_parts.append("")
@@ -484,9 +464,7 @@ def write_blob_manifest(rows: list[dict]) -> None:
         }
         for r in rows
     ]
-    BLOB_MANIFEST_PATH.write_text(
-        json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8"
-    )
+    BLOB_MANIFEST_PATH.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
 
 
 def write_fixtures(rows: list[dict]) -> None:
@@ -512,9 +490,7 @@ def write_fixtures(rows: list[dict]) -> None:
         }
         for r in rows
     ]
-    FIXTURES_PATH.write_text(
-        json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8"
-    )
+    FIXTURES_PATH.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

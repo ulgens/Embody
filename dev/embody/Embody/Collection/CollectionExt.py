@@ -16,7 +16,7 @@ class CollectionExt:
 
     def ScanTdn(self, tdn):
         """Return the C2 capability report for a TDN dict."""
-        return self.ownerComp.op('scanner').module.scan_tdn(tdn if isinstance(tdn, dict) else {})
+        return self.ownerComp.op("scanner").module.scan_tdn(tdn if isinstance(tdn, dict) else {})
 
     def PlanCommunityPaste(self, tdn):
         """Scan a community TDN dict and return the import plan (live or inert).
@@ -34,13 +34,20 @@ class CollectionExt:
         own is_pure_value_expression, so the verdict and the neutralization agree.
         """
         tdn = tdn if isinstance(tdn, dict) else {}
-        scanner = self.ownerComp.op('scanner').module
-        safe_import = self.ownerComp.op('safe_import').module
+        scanner = self.ownerComp.op("scanner").module
+        safe_import = self.ownerComp.op("safe_import").module
         capability = scanner.scan_tdn(tdn)
-        if capability.get('verdict') == 'clean':
-            return {'mode': 'live', 'tdn': tdn,
-                    'capability': capability, 'summary': safe_import._empty_summary()}
-        inert_tdn, summary = safe_import.make_inert(
-            tdn, is_pure_expr=scanner.is_pure_value_expression)
-        return {'mode': 'inert', 'tdn': inert_tdn,
-                'capability': capability, 'summary': summary}
+        if capability.get("verdict") == "clean":
+            return {
+                "mode": "live",
+                "tdn": tdn,
+                "capability": capability,
+                "summary": safe_import._empty_summary(),
+            }
+        inert_tdn, summary = safe_import.make_inert(tdn, is_pure_expr=scanner.is_pure_value_expression)
+        return {
+            "mode": "inert",
+            "tdn": inert_tdn,
+            "capability": capability,
+            "summary": summary,
+        }

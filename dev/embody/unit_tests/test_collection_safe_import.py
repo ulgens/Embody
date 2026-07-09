@@ -24,6 +24,7 @@ import copy
 # Adversarial / fixture TDN builders (kept local + deterministic)
 # ---------------------------------------------------------------------------
 
+
 def _base_tdn(operators=None, **extra):
     tdn = {
         "format": "tdn",
@@ -97,7 +98,6 @@ def _collect_structure(tdn):
 
 
 class TestCollectionSafeImport(EmbodyTestCase):
-
     # The summary keys make_inert always reports (from safe_import.SUMMARY_KEYS).
     SUMMARY_KEYS = (
         "execute_dats_disabled",
@@ -109,24 +109,24 @@ class TestCollectionSafeImport(EmbodyTestCase):
 
     def setUp(self):
         super().setUp()
-        collection = self.embody.op('Collection')
+        collection = self.embody.op("Collection")
         if collection is None:
-            raise SkipTest('Collection component not present')
+            raise SkipTest("Collection component not present")
 
-        si_dat = collection.op('safe_import')
+        si_dat = collection.op("safe_import")
         if si_dat is None:
-            raise SkipTest('Collection/safe_import not present')
+            raise SkipTest("Collection/safe_import not present")
         self.si = si_dat.module
 
-        scanner_dat = collection.op('scanner')
+        scanner_dat = collection.op("scanner")
         if scanner_dat is None:
-            raise SkipTest('Collection/scanner not present')
+            raise SkipTest("Collection/scanner not present")
         self.scanner = scanner_dat.module
 
         try:
             self.coll = collection.ext.Collection
         except Exception:
-            raise SkipTest('CollectionExt not initialized')
+            raise SkipTest("CollectionExt not initialized")
 
     # -----------------------------------------------------------------------
     # Helpers
@@ -137,8 +137,10 @@ class TestCollectionSafeImport(EmbodyTestCase):
         defaults.update(expected)
         for key, value in defaults.items():
             self.assertEqual(
-                summary[key], value,
-                'summary[%r] expected %r got %r' % (key, value, summary.get(key)))
+                summary[key],
+                value,
+                "summary[%r] expected %r got %r" % (key, value, summary.get(key)),
+            )
 
     # =======================================================================
     # make_inert -- execute DATs
@@ -181,7 +183,11 @@ class TestCollectionSafeImport(EmbodyTestCase):
                 },
                 "custom_pars": {
                     "Controls": [
-                        {"name": "Speed", "style": "Float", "value": "=absTime.seconds"},
+                        {
+                            "name": "Speed",
+                            "style": "Float",
+                            "value": "=absTime.seconds",
+                        },
                         {"name": "Label", "style": "Str", "value": "~op('label')"},
                         {"name": "Enabled", "style": "Toggle", "value": "=1"},
                         {"name": "Pair", "style": "XY", "values": ["=1", 2]},
@@ -444,7 +450,10 @@ class TestCollectionSafeImport(EmbodyTestCase):
         result = self.si.is_inert({
             "network_path": "/bad",
             "parameters": "bad",
-            "operators": [None, {"name": "c", "type": "webclientDAT", "flags": "bad"}],
+            "operators": [
+                None,
+                {"name": "c", "type": "webclientDAT", "flags": "bad"},
+            ],
         })
         self.assertIsInstance(result, bool)
 

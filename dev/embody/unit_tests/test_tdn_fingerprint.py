@@ -14,19 +14,18 @@ change it, and Embody-managed About metadata (Build/Date/Touchbuild) must
 NOT change it (so build bumps don't cause spurious dirty).
 """
 
-runner_mod = op.unit_tests.op('TestRunnerExt').module
+runner_mod = op.unit_tests.op("TestRunnerExt").module
 EmbodyTestCase = runner_mod.EmbodyTestCase
 
 
 class TestTDNFingerprint(EmbodyTestCase):
-
     def _make_comp(self):
         """A base COMP with one child and a top-level custom float par."""
-        comp = self.sandbox.create(baseCOMP, 'fp_comp')
-        child = comp.create(constantCHOP, 'child1')
+        comp = self.sandbox.create(baseCOMP, "fp_comp")
+        child = comp.create(constantCHOP, "child1")
         child.nodeX, child.nodeY = 0, 0
-        pg = comp.appendCustomPage('Test')
-        p = pg.appendFloat('Testval', label='Test Value')[0]
+        pg = comp.appendCustomPage("Test")
+        p = pg.appendFloat("Testval", label="Test Value")[0]
         p.default = 0.0
         p.val = 0.0
         return comp, child
@@ -41,25 +40,31 @@ class TestTDNFingerprint(EmbodyTestCase):
         before = self._fp(comp)
         comp.par.Testval = 5.0
         self.assertNotEqual(
-            before, self._fp(comp),
-            'Top-level parameter change must change the TDN fingerprint')
+            before,
+            self._fp(comp),
+            "Top-level parameter change must change the TDN fingerprint",
+        )
 
     def test_child_param_change_detected(self):
         comp, child = self._make_comp()
         before = self._fp(comp)
         child.par.value0 = 3.0
         self.assertNotEqual(
-            before, self._fp(comp),
-            'Child operator parameter change must change the TDN fingerprint')
+            before,
+            self._fp(comp),
+            "Child operator parameter change must change the TDN fingerprint",
+        )
 
     def test_expression_change_detected(self):
         comp, _ = self._make_comp()
         comp.par.Testval = 1.0
         before = self._fp(comp)
-        comp.par.Testval.expr = 'absTime.frame'
+        comp.par.Testval.expr = "absTime.frame"
         self.assertNotEqual(
-            before, self._fp(comp),
-            'Switching a par to expression mode must change the fingerprint')
+            before,
+            self._fp(comp),
+            "Switching a par to expression mode must change the fingerprint",
+        )
 
     # --- structural changes still detected ---
 
@@ -68,30 +73,36 @@ class TestTDNFingerprint(EmbodyTestCase):
         before = self._fp(comp)
         child.nodeX += 100
         self.assertNotEqual(
-            before, self._fp(comp),
-            'Structural (move) change must still change the fingerprint')
+            before,
+            self._fp(comp),
+            "Structural (move) change must still change the fingerprint",
+        )
 
     # --- About-page metadata excluded (no spurious dirty on build bumps) ---
 
     def test_build_par_bump_ignored(self):
         comp, _ = self._make_comp()
-        ab = comp.appendCustomPage('About')
-        bp = ab.appendInt('Build')[0]
+        ab = comp.appendCustomPage("About")
+        bp = ab.appendInt("Build")[0]
         bp.default = 1
         bp.val = 1
         before = self._fp(comp)
         comp.par.Build = 99
         self.assertEqual(
-            before, self._fp(comp),
-            'Build/Date/Touchbuild bumps must NOT change the fingerprint')
+            before,
+            self._fp(comp),
+            "Build/Date/Touchbuild bumps must NOT change the fingerprint",
+        )
 
     # --- determinism ---
 
     def test_fingerprint_stable_when_unchanged(self):
         comp, _ = self._make_comp()
         self.assertEqual(
-            self._fp(comp), self._fp(comp),
-            'Fingerprint must be deterministic for an unchanged network')
+            self._fp(comp),
+            self._fp(comp),
+            "Fingerprint must be deterministic for an unchanged network",
+        )
 
     # --- baseline primed at externalize time (no lazy-on-first-scan gap) ---
 
@@ -101,24 +112,25 @@ class TestTDNFingerprint(EmbodyTestCase):
         param edit landing between externalize and that first scan would be
         absorbed into the baseline and the COMP would wrongly read clean."""
         import os
+
         emb = self.embody_ext
-        comp = self.sandbox.create(baseCOMP, 'fp_prime')
-        comp.create(constantCHOP, 'c')
+        comp = self.sandbox.create(baseCOMP, "fp_prime")
+        comp.create(constantCHOP, "c")
         rel = None
         try:
             emb.applyTagToOperator(comp, self.embody.par.Tdntag.eval())
             tbl = emb.Externalizations
             for r in range(1, tbl.numRows):
-                if tbl[r, 'path'].val == comp.path:
-                    rel = tbl[r, 'rel_file_path'].val
+                if tbl[r, "path"].val == comp.path:
+                    rel = tbl[r, "rel_file_path"].val
                     break
             # Baseline must exist right after externalize, with NO scan between.
             self.assertIn(
-                comp.path, emb._tdn_fingerprints,
-                'externalization must prime the TDN fingerprint baseline')
-            self.assertFalse(
-                emb._isTDNDirty(comp),
-                'a freshly externalized COMP must read clean')
+                comp.path,
+                emb._tdn_fingerprints,
+                "externalization must prime the TDN fingerprint baseline",
+            )
+            self.assertFalse(emb._isTDNDirty(comp), "a freshly externalized COMP must read clean")
         finally:
             if rel:
                 try:
@@ -160,55 +172,61 @@ class TestTDNDirtyState(EmbodyTestCase):
             self.embody_ext._tdn_fingerprints.pop(self._primed, None)
         super().tearDown()
 
-    def _tdn_table(self, comp_path, dirty=''):
+    def _tdn_table(self, comp_path, dirty=""):
         """Build a synthetic table with one TDN-strategy row and swap it in."""
-        t = self.sandbox.create(tableDAT, 'synthetic_externalizations')
+        t = self.sandbox.create(tableDAT, "synthetic_externalizations")
         t.clear()
-        t.appendRow(['path', 'strategy', 'dirty'])
-        t.appendRow([comp_path, 'tdn', dirty])
+        t.appendRow(["path", "strategy", "dirty"])
+        t.appendRow([comp_path, "tdn", dirty])
         self.embody.par.Externalizations = t.path
         return t
 
     # --- Fix #5: passive scan clears a stale dirty flag on revert ---
 
     def test_dirtyHandler_clears_stale_dirty_when_clean(self):
-        comp = self.sandbox.create(baseCOMP, 'revert_comp')
-        comp.create(constantCHOP, 'c')
-        t = self._tdn_table(comp.path, dirty='True')  # stale 'dirty' from a prior scan
-        self.embody.par.Tdnmode = 'full'
+        comp = self.sandbox.create(baseCOMP, "revert_comp")
+        comp.create(constantCHOP, "c")
+        t = self._tdn_table(comp.path, dirty="True")  # stale 'dirty' from a prior scan
+        self.embody.par.Tdnmode = "full"
         # Prime the baseline so the live network reads CLEAN (matches baseline).
         self.embody_ext._storeTDNFingerprint(comp)
         self._primed = comp.path
         # Passive scan: the COMP is clean now, so the stale flag must clear.
         self.embody_ext.dirtyHandler(False)
         self.assertEqual(
-            t[comp.path, 'dirty'].val, '',
-            'A clean TDN COMP must have its stale dirty flag cleared by the '
-            'passive scan (otherwise the indicator sticks after a revert)')
+            t[comp.path, "dirty"].val,
+            "",
+            "A clean TDN COMP must have its stale dirty flag cleared by the "
+            "passive scan (otherwise the indicator sticks after a revert)",
+        )
 
     def test_dirtyHandler_marks_dirty_when_changed(self):
-        comp = self.sandbox.create(baseCOMP, 'change_comp')
-        comp.create(constantCHOP, 'c')
-        t = self._tdn_table(comp.path, dirty='')
-        self.embody.par.Tdnmode = 'full'
+        comp = self.sandbox.create(baseCOMP, "change_comp")
+        comp.create(constantCHOP, "c")
+        t = self._tdn_table(comp.path, dirty="")
+        self.embody.par.Tdnmode = "full"
         self.embody_ext._storeTDNFingerprint(comp)
         self._primed = comp.path
         # Mutate the network so it diverges from the baseline.
-        comp.create(constantCHOP, 'c2')
+        comp.create(constantCHOP, "c2")
         self.embody_ext.dirtyHandler(False)
         self.assertEqual(
-            t[comp.path, 'dirty'].val, 'True',
-            'A structurally changed TDN COMP must be flagged dirty')
+            t[comp.path, "dirty"].val,
+            "True",
+            "A structurally changed TDN COMP must be flagged dirty",
+        )
 
     # --- Fix #4: DirtyCount trusts the table for TDN COMPs, not oper.dirty ---
 
     def test_DirtyCount_clean_tdn_comp_not_counted(self):
-        comp = self.sandbox.create(baseCOMP, 'count_clean')
-        comp.create(constantCHOP, 'c')
-        self._tdn_table(comp.path, dirty='')
+        comp = self.sandbox.create(baseCOMP, "count_clean")
+        comp.create(constantCHOP, "c")
+        self._tdn_table(comp.path, dirty="")
         self.assertEqual(
-            self.embody_ext.DirtyCount(), 0,
-            'A clean TDN COMP (table dirty="") must NOT be counted')
+            self.embody_ext.DirtyCount(),
+            0,
+            'A clean TDN COMP (table dirty="") must NOT be counted',
+        )
 
     def test_DirtyCount_counts_dirty_tdn_comp_from_table(self):
         # The decisive case: the table says 'True' while live oper.dirty is
@@ -217,13 +235,16 @@ class TestTDNDirtyState(EmbodyTestCase):
         # where oper.dirty is always True for TDN COMPs, OVER-counted clean
         # ones). The strategy-aware branch reads the table value for TDN COMPs
         # regardless of oper.dirty.
-        comp = self.sandbox.create(baseCOMP, 'count_dirty')
-        comp.create(constantCHOP, 'c')
-        self.assertFalse(comp.dirty,
-            'precondition: synthetic sandbox COMP reads oper.dirty=False, so '
-            'only the table-driven branch can produce a nonzero count here')
-        self._tdn_table(comp.path, dirty='True')
+        comp = self.sandbox.create(baseCOMP, "count_dirty")
+        comp.create(constantCHOP, "c")
+        self.assertFalse(
+            comp.dirty,
+            "precondition: synthetic sandbox COMP reads oper.dirty=False, so "
+            "only the table-driven branch can produce a nonzero count here",
+        )
+        self._tdn_table(comp.path, dirty="True")
         self.assertEqual(
-            self.embody_ext.DirtyCount(), 1,
-            'A TDN COMP flagged dirty in the table must be counted even when '
-            'live oper.dirty is False')
+            self.embody_ext.DirtyCount(),
+            1,
+            "A TDN COMP flagged dirty in the table must be counted even when live oper.dirty is False",
+        )

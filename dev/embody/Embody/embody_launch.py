@@ -47,37 +47,41 @@ def launch_ai_client(ext) -> None:
         label = ext._aiClientLabel()
         spec = ext._AICLIENT_LAUNCH.get(client)
         cwd = ext._findProjectRoot()
-        title = 'Embody -- Launch AI Client'
+        title = "Embody -- Launch AI Client"
         if spec is None:
             msg = f'No launcher is wired for "{label}". Open your AI tool manually at {cwd}.'
-            ext.Log(f'No launcher for "{label}". Open it manually at {cwd}.', 'INFO')
-            ext._messageBox(title, msg, ['OK'])
+            ext.Log(f'No launcher for "{label}". Open it manually at {cwd}.', "INFO")
+            ext._messageBox(title, msg, ["OK"])
             return
-        if spec['kind'] == 'editor':
+        if spec["kind"] == "editor":
             if ext._launchEditor(
-                    cwd, spec['app'], bundle_id=spec.get('bundle'),
-                    win_exe_candidates=spec.get('win_exe', ()),
-                    win_shim=spec.get('win_shim'), mac_cli=spec.get('mac_cli'),
-                    mac_alt_names=spec.get('alt_names', ()),
-                    install=spec.get('install')):
-                ext.Log(f'Launched {label} at {cwd}', 'SUCCESS')
+                cwd,
+                spec["app"],
+                bundle_id=spec.get("bundle"),
+                win_exe_candidates=spec.get("win_exe", ()),
+                win_shim=spec.get("win_shim"),
+                mac_cli=spec.get("mac_cli"),
+                mac_alt_names=spec.get("alt_names", ()),
+                install=spec.get("install"),
+            ):
+                ext.Log(f"Launched {label} at {cwd}", "SUCCESS")
             else:
-                msg = f'Could not open {label}. Is it installed?'
-                if spec.get('install'):
-                    msg += f'\n\nInstall: {spec.get("install")}'
-                msg += f'\n\nProject root: {cwd}'
-                ext._messageBox(title, msg, ['OK'])
-        elif ext._launchTerminal(cwd, spec['cli'], install=spec.get('install')):
-            ext.Log(f'Opened a terminal for {label} at {cwd}', 'INFO')
+                msg = f"Could not open {label}. Is it installed?"
+                if spec.get("install"):
+                    msg += f"\n\nInstall: {spec.get('install')}"
+                msg += f"\n\nProject root: {cwd}"
+                ext._messageBox(title, msg, ["OK"])
+        elif ext._launchTerminal(cwd, spec["cli"], install=spec.get("install")):
+            ext.Log(f"Opened a terminal for {label} at {cwd}", "INFO")
         else:
-            msg = f'Could not open a terminal for {label}. Is it installed?'
-            if spec.get('install'):
-                msg += f'\n\nInstall: {spec.get("install")}'
-            msg += f'\n\nProject root: {cwd}'
-            ext._messageBox(title, msg, ['OK'])
+            msg = f"Could not open a terminal for {label}. Is it installed?"
+            if spec.get("install"):
+                msg += f"\n\nInstall: {spec.get('install')}"
+            msg += f"\n\nProject root: {cwd}"
+            ext._messageBox(title, msg, ["OK"])
     except Exception as e:
-        ext.Log(f'Failed to launch AI client: {e}', 'ERROR')
-        ext._messageBox('Embody -- Launch AI Client', str(e), ['OK'])
+        ext.Log(f"Failed to launch AI client: {e}", "ERROR")
+        ext._messageBox("Embody -- Launch AI Client", str(e), ["OK"])
 
 
 def resolve_cli_abs(ext, cli: str) -> Optional[str]:
@@ -87,22 +91,22 @@ def resolve_cli_abs(ext, cli: str) -> Optional[str]:
     new terminal's own login shell resolve the CLI (which is what defeats the
     Dock-truncated PATH on macOS, where ~/.local/bin is not on TD's PATH).
     """
-    if sys.platform.startswith('win'):
+    if sys.platform.startswith("win"):
         cands = [
             # Native installers (claude's recommended install.ps1 lands here
             # -- the Windows twin of ~/.local/bin below).
-            os.path.expandvars(rf'%USERPROFILE%\.local\bin\{cli}.exe'),
-            os.path.expandvars(rf'%APPDATA%\npm\{cli}.cmd'),
-            os.path.expandvars(rf'%USERPROFILE%\.bun\bin\{cli}.exe'),
-            os.path.expandvars(rf'%LOCALAPPDATA%\Programs\{cli}\{cli}.exe'),
+            os.path.expandvars(rf"%USERPROFILE%\.local\bin\{cli}.exe"),
+            os.path.expandvars(rf"%APPDATA%\npm\{cli}.cmd"),
+            os.path.expandvars(rf"%USERPROFILE%\.bun\bin\{cli}.exe"),
+            os.path.expandvars(rf"%LOCALAPPDATA%\Programs\{cli}\{cli}.exe"),
         ]
     else:
         home = Path.home()
         cands = [
-            home / '.local' / 'bin' / cli,
-            Path('/opt/homebrew/bin') / cli,
-            Path('/usr/local/bin') / cli,
-            home / '.bun' / 'bin' / cli,
+            home / ".local" / "bin" / cli,
+            Path("/opt/homebrew/bin") / cli,
+            Path("/usr/local/bin") / cli,
+            home / ".bun" / "bin" / cli,
         ]
     for c in cands:
         try:
@@ -123,12 +127,20 @@ def launch_env(ext) -> dict:
     and PYTHON* pointing into TD's own bundle. `open` forwards the caller's
     environment to the launched app, so these must be stripped here.
     """
-    return {k: v for k, v in os.environ.items()
-            if k not in ext._LAUNCH_ENV_STRIP and not k.startswith('DYLD_')}
+    return {k: v for k, v in os.environ.items() if k not in ext._LAUNCH_ENV_STRIP and not k.startswith("DYLD_")}
 
 
-def launch_editor(ext, cwd, app_name, bundle_id=None, win_exe_candidates=(),
-                  win_shim=None, mac_cli=None, mac_alt_names=(), install=None) -> bool:
+def launch_editor(
+    ext,
+    cwd,
+    app_name,
+    bundle_id=None,
+    win_exe_candidates=(),
+    win_shim=None,
+    mac_cli=None,
+    mac_alt_names=(),
+    install=None,
+) -> bool:
     """Open a GUI editor with cwd as its workspace. Returns True on a launched
     window. macOS uses LaunchServices (PATH-independent); Windows launches the
     real .exe from known install dirs. Never a hijackable PATH shim unless
@@ -138,31 +150,31 @@ def launch_editor(ext, cwd, app_name, bundle_id=None, win_exe_candidates=(),
     # Clean env: TD's ELECTRON_RUN_AS_NODE would make a fresh Electron editor
     # quit instantly ("bounce then close"); DYLD/PYTHON vars can mis-link it.
     env = launch_env(ext)
-    if sys.platform.startswith('darwin'):
+    if sys.platform.startswith("darwin"):
         # /usr/bin/open: absolute path so it resolves even if TD's PATH lacks
         # /usr/bin. -a/-b MANDATORY: a bare `open <dir>` opens Finder, not the
         # editor. Each attempt returns non-zero WITHOUT launching if that app
         # is absent, so exit-code gating (subprocess.call, ~ms since open hands
         # off to LaunchServices and exits) doubles as install detection.
-        _open = '/usr/bin/open'
-        attempts = [[_open, '-a', app_name, d]]
+        _open = "/usr/bin/open"
+        attempts = [[_open, "-a", app_name, d]]
         if bundle_id:
-            attempts.append([_open, '-b', bundle_id, d])
-        attempts += [[_open, '-a', n, d] for n in mac_alt_names]
+            attempts.append([_open, "-b", bundle_id, d])
+        attempts += [[_open, "-a", n, d] for n in mac_alt_names]
         if mac_cli and Path(mac_cli).exists():
-            attempts.append([mac_cli, d])   # app-own CLI, not a hijackable shim
+            attempts.append([mac_cli, d])  # app-own CLI, not a hijackable shim
         for cmd in attempts:
             try:
                 if subprocess.call(cmd, stdin=subprocess.DEVNULL, env=env) == 0:
                     return True
             except OSError:
                 continue
-        msg = f'Could not open {app_name} at {d}; is it installed?'
+        msg = f"Could not open {app_name} at {d}; is it installed?"
         if install:
-            msg += f' Install: {install}'
-        ext.Log(msg, 'WARNING')
+            msg += f" Install: {install}"
+        ext.Log(msg, "WARNING")
         return False
-    if sys.platform.startswith('win'):
+    if sys.platform.startswith("win"):
         try:
             for cand in win_exe_candidates:
                 exe = os.path.expandvars(cand)
@@ -176,23 +188,29 @@ def launch_editor(ext, cwd, app_name, bundle_id=None, win_exe_candidates=(),
                 # with the editor absent).
                 resolved = shutil.which(win_shim)
                 if resolved:
-                    ext.Log(f'{app_name}: launching via PATH "{win_shim}" ({resolved}) '
-                            '-- may resolve to a different editor build.', 'WARNING')
+                    ext.Log(
+                        f'{app_name}: launching via PATH "{win_shim}" ({resolved}) '
+                        "-- may resolve to a different editor build.",
+                        "WARNING",
+                    )
                     # .cmd/.bat shims run through cmd; the doubled-quote form
                     # (""prog" "arg"") keeps program+dir literally quoted so a
                     # metachar (& | etc.) in the dir is not re-parsed by cmd.
-                    subprocess.Popen(f'cmd /c ""{resolved}" "{d}""',
-                                     stdin=subprocess.DEVNULL, env=env)
+                    subprocess.Popen(
+                        f'cmd /c ""{resolved}" "{d}""',
+                        stdin=subprocess.DEVNULL,
+                        env=env,
+                    )
                     return True
         except OSError as e:
-            ext.Log(f'{app_name}: launch failed ({e}).', 'WARNING')
+            ext.Log(f"{app_name}: launch failed ({e}).", "WARNING")
             return False
-        msg = f'Could not locate {app_name}.'
+        msg = f"Could not locate {app_name}."
         if install:
-            msg += f' Install: {install}'
-        ext.Log(msg, 'WARNING')
+            msg += f" Install: {install}"
+        ext.Log(msg, "WARNING")
         return False
-    ext.Log(f'Editor launch unsupported on {sys.platform}.', 'INFO')
+    ext.Log(f"Editor launch unsupported on {sys.platform}.", "INFO")
     return False
 
 
@@ -204,50 +222,49 @@ def build_terminal_script(ext, cwd, cli, abs_cli, install=None) -> str:
     terminal's own login-shell PATH (with a visible install guard if truly
     absent). install: the how-to-install hint shown in that guard.
     """
-    q = str(cwd).replace("'", "'\\''")        # single-quote-escape the dir
-    lines = ['#!/bin/zsh -l',
-             f"cd '{q}' || {{ echo \"launch dir missing\"; exec \"${{SHELL:-/bin/zsh}}\" -il; }}"]
+    q = str(cwd).replace("'", "'\\''")  # single-quote-escape the dir
+    lines = [
+        "#!/bin/zsh -l",
+        f'cd \'{q}\' || {{ echo "launch dir missing"; exec "${{SHELL:-/bin/zsh}}" -il; }}',
+    ]
     if abs_cli:
-        lines.append(f'exec {shlex.quote(abs_cli)}')
+        lines.append(f"exec {shlex.quote(abs_cli)}")
     else:
         # Not found by fast probe -- let the login shell resolve it. If truly
         # absent, print install guidance and keep the window open.
-        hint = (install or 'see the tool website').replace('"', "'").replace('$', '').replace('`', '')
-        lines.append(f'if ! command -v {cli} >/dev/null 2>&1; then')
+        hint = (install or "see the tool website").replace('"', "'").replace("$", "").replace("`", "")
+        lines.append(f"if ! command -v {cli} >/dev/null 2>&1; then")
         lines.append(f'  echo "{cli} not found on PATH."')
         lines.append(f'  echo "Install:  {hint}"')
         lines.append('  echo "Then close this window and press Launch AI Client again."')
         lines.append('  exec "${SHELL:-/bin/zsh}" -i')
-        lines.append('fi')
+        lines.append("fi")
         lines.append(f'exec "${{SHELL:-/bin/zsh}}" -ilc {shlex.quote(cli)}')
-    return '\n'.join(lines) + '\n'
+    return "\n".join(lines) + "\n"
 
 
 def build_terminal_script_win(ext, cwd, cli, abs_cli, install=None) -> str:
     """Windows twin of _buildTerminalScript: the .bat run via cmd /K.
     Pure (no I/O) so the correctness-critical content is unit-testable."""
-    d = str(cwd).replace('"', '')
-    lines = ['@echo off',
-             f'cd /d "{d}"',
-             'if errorlevel 1 echo launch dir missing.']
+    d = str(cwd).replace('"', "")
+    lines = ["@echo off", f'cd /d "{d}"', "if errorlevel 1 echo launch dir missing."]
     if abs_cli:
         lines.append(f'"{str(abs_cli).replace(chr(34), "")}"')
     else:
-        hint = ''.join(c for c in (install or 'see the tool website')
-                       if re.match(r"[A-Za-z0-9 ._:/@()+=,'-]", c))
-        hint = ' '.join(hint.split()) or 'see the tool website'
+        hint = "".join(c for c in (install or "see the tool website") if re.match(r"[A-Za-z0-9 ._:/@()+=,'-]", c))
+        hint = " ".join(hint.split()) or "see the tool website"
         lines += [
-            f'where {cli} >nul 2>nul',
-            'if errorlevel 1 goto :missing',
+            f"where {cli} >nul 2>nul",
+            "if errorlevel 1 goto :missing",
             cli,
-            'goto :done',
-            ':missing',
-            f'echo {cli} not found on PATH.',
-            f'echo Install:  {hint}',
-            'echo Then close this window and press Launch AI Client again.',
-            ':done',
+            "goto :done",
+            ":missing",
+            f"echo {cli} not found on PATH.",
+            f"echo Install:  {hint}",
+            "echo Then close this window and press Launch AI Client again.",
+            ":done",
         ]
-    return '\r\n'.join(lines) + '\r\n'
+    return "\r\n".join(lines) + "\r\n"
 
 
 def launch_terminal(ext, cwd, cli, install=None) -> bool:
@@ -262,28 +279,27 @@ def launch_terminal(ext, cwd, cli, install=None) -> bool:
     lives in ~/.local/bin, invisible to a Dock-launched TD.
     """
     d = str(cwd)
-    env = launch_env(ext)   # strip TD's injected vars from the terminal too
+    env = launch_env(ext)  # strip TD's injected vars from the terminal too
     try:
-        if sys.platform.startswith('darwin'):
+        if sys.platform.startswith("darwin"):
             body = build_terminal_script(ext, cwd, cli, resolve_cli_abs(ext, cli), install)
-            scripts_dir = Path(cwd) / '.embody'
+            scripts_dir = Path(cwd) / ".embody"
             scripts_dir.mkdir(parents=True, exist_ok=True)
-            script = scripts_dir / f'launch_{cli}.command'
-            script.write_text(body, encoding='utf-8')
+            script = scripts_dir / f"launch_{cli}.command"
+            script.write_text(body, encoding="utf-8")
             script.chmod(0o755)
             # Do NOT delete: `open` returns before the terminal reads the file.
             # /usr/bin/open: absolute so it resolves even if PATH lacks /usr/bin.
-            if subprocess.call(['/usr/bin/open', str(script)],
-                               stdin=subprocess.DEVNULL, env=env) != 0:
-                ext.Log(f'Failed to open a terminal for {cli}.', 'WARNING')
+            if subprocess.call(["/usr/bin/open", str(script)], stdin=subprocess.DEVNULL, env=env) != 0:
+                ext.Log(f"Failed to open a terminal for {cli}.", "WARNING")
                 return False
             return True
-        if sys.platform.startswith('win'):
+        if sys.platform.startswith("win"):
             body = build_terminal_script_win(ext, cwd, cli, resolve_cli_abs(ext, cli), install)
-            scripts_dir = Path(cwd) / '.embody'
+            scripts_dir = Path(cwd) / ".embody"
             scripts_dir.mkdir(parents=True, exist_ok=True)
-            script = scripts_dir / f'launch_{cli}.bat'
-            script.write_text(body, encoding='utf-8', newline='')
+            script = scripts_dir / f"launch_{cli}.bat"
+            script.write_text(body, encoding="utf-8", newline="")
             # Do NOT delete: cmd /K returns after starting the console, and
             # the console reads this file after Popen returns.
             #
@@ -297,11 +313,15 @@ def launch_terminal(ext, cwd, cli, install=None) -> bool:
             # exactly the "blank terminal, login browser flashes then closes"
             # bug on Windows. With CREATE_NEW_CONSOLE and no redirection, the
             # fresh console owns fully-working stdin/stdout/stderr.
-            subprocess.Popen(f'cmd /K ""{script}""', cwd=d,
-                             creationflags=subprocess.CREATE_NEW_CONSOLE, env=env)
+            subprocess.Popen(
+                f'cmd /K ""{script}""',
+                cwd=d,
+                creationflags=subprocess.CREATE_NEW_CONSOLE,
+                env=env,
+            )
             return True
     except OSError as e:
-        ext.Log(f'Failed to open a terminal for {cli}: {e}', 'WARNING')
+        ext.Log(f"Failed to open a terminal for {cli}: {e}", "WARNING")
         return False
-    ext.Log(f'Terminal launch unsupported on {sys.platform}.', 'INFO')
+    ext.Log(f"Terminal launch unsupported on {sys.platform}.", "INFO")
     return False

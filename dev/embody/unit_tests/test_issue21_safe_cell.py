@@ -21,7 +21,7 @@ finish writing the .toe (pre-fix, an unhandled exception there caused
 the save to truncate to 0 bytes).
 """
 
-runner_mod = op.unit_tests.op('TestRunnerExt').module
+runner_mod = op.unit_tests.op("TestRunnerExt").module
 EmbodyTestCase = runner_mod.EmbodyTestCase
 
 
@@ -43,11 +43,11 @@ class TestIssue21SafeCellAccess(EmbodyTestCase):
             raise AssertionError(
                 f"Externalizations restore failed: param value "
                 f"{self.embody.par.Externalizations.eval()} != "
-                f"{self._original_table}")
+                f"{self._original_table}"
+            )
         super().tearDown()
 
-    def _buildBadTable(self, drop_cols=(), short_row_at=None, copy_rows=3,
-                       extra_rows=()):
+    def _buildBadTable(self, drop_cols=(), short_row_at=None, copy_rows=3, extra_rows=()):
         """Build a synthetic externalizations table.
 
         Args:
@@ -61,7 +61,7 @@ class TestIssue21SafeCellAccess(EmbodyTestCase):
         headers = [live[0, c].val for c in range(live.numCols)]
         keep = [c for c, h in enumerate(headers) if h not in drop_cols]
 
-        bad = self.sandbox.create(tableDAT, 'bad_externalizations')
+        bad = self.sandbox.create(tableDAT, "bad_externalizations")
         bad.clear()
         bad.appendRow([headers[c] for c in keep])
 
@@ -90,7 +90,7 @@ class TestIssue21SafeCellAccess(EmbodyTestCase):
     def test_getExternalizedOps_tolerates_missing_strategy_and_type(self):
         # strategy missing -> falls through to legacy branch, which reads
         # type unguarded. Both missing => the legacy .val crashes pre-fix.
-        self._buildBadTable(drop_cols=('strategy', 'type'))
+        self._buildBadTable(drop_cols=("strategy", "type"))
         result = self.embody_ext.getExternalizedOps(COMP)
         self.assertIsInstance(result, list)
 
@@ -102,13 +102,13 @@ class TestIssue21SafeCellAccess(EmbodyTestCase):
         # The previous test that "dropped strategy" was a false positive:
         # has_strategy_col went False and the read was never reached.
         self._buildBadTable(drop_cols=(), short_row_at=0, copy_rows=2)
-        result = self.embody_ext.getExternalizedOps(COMP, strategy='tox')
+        result = self.embody_ext.getExternalizedOps(COMP, strategy="tox")
         self.assertIsInstance(result, list)
 
     # Crash site 2: cleanupAllDuplicateRows reads path unguarded.
 
     def test_cleanupAllDuplicateRows_tolerates_missing_path(self):
-        self._buildBadTable(drop_cols=('path',))
+        self._buildBadTable(drop_cols=("path",))
         self.embody_ext.cleanupAllDuplicateRows()
 
     # Crash site 3: cleanupDuplicateRows matches on path, then reads type
@@ -116,19 +116,20 @@ class TestIssue21SafeCellAccess(EmbodyTestCase):
     # path so the type/timestamp reads execute, then make those columns
     # missing to force the unguarded crash.
 
-    def test_cleanupDuplicateRows_tolerates_missing_type_and_timestamp_when_path_matches(self):
+    def test_cleanupDuplicateRows_tolerates_missing_type_and_timestamp_when_path_matches(
+        self,
+    ):
         # Build a table with valid path column but missing type/timestamp,
         # then query a path that will match a row.
-        bad = self._buildBadTable(drop_cols=('type', 'timestamp'),
-                                  copy_rows=0)
+        bad = self._buildBadTable(drop_cols=("type", "timestamp"), copy_rows=0)
         # Inject 2 rows with the same path (matched) and a few short cells
         # for the remaining columns.
-        match_path = '/sandbox/duplicate/test'
+        match_path = "/sandbox/duplicate/test"
         headers = [bad[0, c].val for c in range(bad.numCols)]
         n_cols = len(headers)
-        path_idx = headers.index('path')
+        path_idx = headers.index("path")
         for _ in range(2):
-            row = [''] * n_cols
+            row = [""] * n_cols
             row[path_idx] = match_path
             bad.appendRow(row)
         # cleanupDuplicateRows must not raise on the missing type/timestamp
@@ -142,17 +143,16 @@ class TestIssue21SafeCellAccess(EmbodyTestCase):
     # Need a row that matches the query path so rel_file_path is read.
 
     def test_RemoveListerRow_tolerates_missing_rel_file_when_path_matches(self):
-        bad = self._buildBadTable(drop_cols=('rel_file_path',), copy_rows=0)
-        match_path = '/sandbox/remove/test'
+        bad = self._buildBadTable(drop_cols=("rel_file_path",), copy_rows=0)
+        match_path = "/sandbox/remove/test"
         headers = [bad[0, c].val for c in range(bad.numCols)]
         n_cols = len(headers)
-        path_idx = headers.index('path')
-        row = [''] * n_cols
+        path_idx = headers.index("path")
+        row = [""] * n_cols
         row[path_idx] = match_path
         bad.appendRow(row)
         # Production: matches path, then tries to read rel_file_path -> crash pre-fix.
-        self.embody_ext.RemoveListerRow(
-            match_path, '', delete_file=False)
+        self.embody_ext.RemoveListerRow(match_path, "", delete_file=False)
 
     # Crash site 5: checkOpsForContinuity has its own try/except wrapper
     # that swallows AttributeError and logs "Error in checkOpsForContinuity".
@@ -163,15 +163,14 @@ class TestIssue21SafeCellAccess(EmbodyTestCase):
         # are missing on injected rows - drives unguarded reads beyond the
         # path check. Inject our own malformed rows so the test doesn't
         # depend on the live table having any data.
-        bad = self._buildBadTable(drop_cols=('rel_file_path', 'type', 'strategy'),
-                                  copy_rows=0)
+        bad = self._buildBadTable(drop_cols=("rel_file_path", "type", "strategy"), copy_rows=0)
         headers = [bad[0, c].val for c in range(bad.numCols)]
         n_cols = len(headers)
-        path_idx = headers.index('path')
+        path_idx = headers.index("path")
         # Inject a row with a non-existent path so production tries to
         # read the missing rel_file_path/type/strategy cells.
-        row = [''] * n_cols
-        row[path_idx] = '/no/such/op'
+        row = [""] * n_cols
+        row[path_idx] = "/no/such/op"
         bad.appendRow(row)
 
         # Capture Log calls. Use **kwargs so we accept whatever signature
@@ -180,43 +179,45 @@ class TestIssue21SafeCellAccess(EmbodyTestCase):
         log_calls = []
         ext = self.embody_ext
         original_log = type(ext).Log
-        def capturing_log(self_, msg, level='INFO', details=None, **kwargs):
+
+        def capturing_log(self_, msg, level="INFO", details=None, **kwargs):
             log_calls.append((level, str(msg)))
             return original_log(self_, msg, level, details, **kwargs)
+
         type(ext).Log = capturing_log
         try:
-            ext.checkOpsForContinuity('externalizations')
+            ext.checkOpsForContinuity("externalizations")
         finally:
             type(ext).Log = original_log
 
         # Pre-fix this would have logged "Error in checkOpsForContinuity"
         # via the function's bare except. Post-fix the safe cell reads
         # should produce no such log.
-        internal_errors = [
-            (lvl, msg) for lvl, msg in log_calls
-            if 'Error in checkOpsForContinuity' in msg
-        ]
-        self.assertEqual(len(internal_errors), 0,
-            f"Expected no internal-error log, got: {internal_errors}")
+        internal_errors = [(lvl, msg) for lvl, msg in log_calls if "Error in checkOpsForContinuity" in msg]
+        self.assertEqual(
+            len(internal_errors),
+            0,
+            f"Expected no internal-error log, got: {internal_errors}",
+        )
 
     # =====================================================================
     # _cellVal helper contract
     # =====================================================================
 
     def test_cellVal_returns_default_for_missing_column(self):
-        self._buildBadTable(drop_cols=('strategy',))
-        val = self.embody_ext._cellVal(1, 'strategy')
-        self.assertEqual(val, '')
+        self._buildBadTable(drop_cols=("strategy",))
+        val = self.embody_ext._cellVal(1, "strategy")
+        self.assertEqual(val, "")
 
     def test_cellVal_returns_default_for_missing_row_key(self):
         # Row-key lookup that doesn't match any row's first column
-        val = self.embody_ext._cellVal('/no/such/path', 'dirty')
-        self.assertEqual(val, '')
+        val = self.embody_ext._cellVal("/no/such/path", "dirty")
+        self.assertEqual(val, "")
 
     def test_cellVal_reads_real_cell_on_well_formed_table(self):
         # Header row, col 0 - always 'path'
         val = self.embody_ext._cellVal(0, 0)
-        self.assertEqual(val, 'path')
+        self.assertEqual(val, "path")
 
     def test_cellVal_returns_default_for_short_row_cell(self):
         # Row exists but has fewer cells than the header declares - the
@@ -226,19 +227,20 @@ class TestIssue21SafeCellAccess(EmbodyTestCase):
         # that row. _cellVal must tolerate this.
         last_header = bad[0, bad.numCols - 1].val
         val = self.embody_ext._cellVal(1, last_header)
-        self.assertEqual(val, '')
+        self.assertEqual(val, "")
 
 
 class TestIssue21PreSaveBoundary(EmbodyTestCase):
     """onProjectPreSave must not propagate exceptions (would truncate .toe)."""
 
     def test_onProjectPreSave_contains_Update_exception(self):
-        execute_mod = op('/embody/Embody/execute').module
+        execute_mod = op("/embody/Embody/execute").module
         ext_class = type(self.embody_ext)
         original_update = ext_class.Update
 
         def boom(self, suppress_refresh=False):
             raise Exception("simulated mid-Update crash (issue #21)")
+
         ext_class.Update = boom
         try:
             # Pre-fix this re-raised. Post-fix it's caught + logged so TD's
@@ -251,12 +253,13 @@ class TestIssue21PreSaveBoundary(EmbodyTestCase):
         # Simulate a failure inside the TDN export phase, not Update itself.
         # The whole pipeline is wrapped - any exception below the Perform
         # Mode early-return must be contained.
-        execute_mod = op('/embody/Embody/execute').module
+        execute_mod = op("/embody/Embody/execute").module
         ext_class = type(self.embody_ext)
         original = ext_class._getTDNStrategyComps
 
         def boom(self):
             raise RuntimeError("simulated mid-pipeline crash")
+
         ext_class._getTDNStrategyComps = boom
         try:
             execute_mod.onProjectPreSave()
@@ -291,30 +294,31 @@ class TestIssue21PreSaveBoundary(EmbodyTestCase):
         orig_get_tdn = ext_class._getTDNStrategyComps
         orig_safety = ext_class._checkTDNContentSafety
         orig_export = tdn_class.ExportNetwork
-        orig_read = tdn_class.__dict__['_read_existing_tdn']  # staticmethod descriptor
+        orig_read = tdn_class.__dict__["_read_existing_tdn"]  # staticmethod descriptor
         orig_strip = ext_class.StripCompChildren
 
         # Fake fixtures: pretend 3 TDN COMPs exist and were exported
         fake_tdn_comps = [
-            ('/__test_issue21_pre_stage/c0', 'fake/c0.tdn'),
-            ('/__test_issue21_pre_stage/c1', 'fake/c1.tdn'),
-            ('/__test_issue21_pre_stage/c2', 'fake/c2.tdn'),
+            ("/__test_issue21_pre_stage/c0", "fake/c0.tdn"),
+            ("/__test_issue21_pre_stage/c1", "fake/c1.tdn"),
+            ("/__test_issue21_pre_stage/c2", "fake/c2.tdn"),
         ]
 
         # Track which strip calls happened
         strip_calls = []
+
         def crashing_strip(self_, comp):
-            strip_calls.append(comp.path if comp else '<None>')
+            strip_calls.append(comp.path if comp else "<None>")
             if len(strip_calls) == 2:
                 raise Exception("simulated mid-strip crash (Tier 1.5 test)")
             # Don't actually strip - fake comps may not exist
 
         # Pre-stage cleanup: ensure no stale storage
-        embody.unstore('_tdn_stripped_paths')
-        embody.unstore('_tdn_pane_restore')
+        embody.unstore("_tdn_stripped_paths")
+        embody.unstore("_tdn_pane_restore")
 
         # Apply patches
-        embody.par.Tdnmode = 'full'
+        embody.par.Tdnmode = "full"
         embody.par.Tdnstriponsave = True
         ext_class.Update = lambda self_, suppress_refresh=False: None
         ext_class._getTDNStrategyComps = lambda self_: list(fake_tdn_comps)
@@ -325,52 +329,62 @@ class TestIssue21PreSaveBoundary(EmbodyTestCase):
         # the export by making _read_existing_tdn return a matching dict so
         # the "skip if unchanged" branch fires. But we still need op(comp_path)
         # to return something. Build a sandbox COMP with the fake names.
-        sandbox = self.sandbox.create(baseCOMP, '__test_issue21_pre_stage')
+        sandbox = self.sandbox.create(baseCOMP, "__test_issue21_pre_stage")
         for path, _ in fake_tdn_comps:
-            name = path.rsplit('/', 1)[-1]
+            name = path.rsplit("/", 1)[-1]
             comp = sandbox.create(baseCOMP, name)
             # Give it a child so has_children is True (Phase 1 skips empty COMPs)
-            comp.create(baseCOMP, 'placeholder')
+            comp.create(baseCOMP, "placeholder")
         # Re-point our fake paths to the sandbox COMPs
         fake_tdn_comps[:] = [
-            (sandbox.op('c0').path, 'fake/c0.tdn'),
-            (sandbox.op('c1').path, 'fake/c1.tdn'),
-            (sandbox.op('c2').path, 'fake/c2.tdn'),
+            (sandbox.op("c0").path, "fake/c0.tdn"),
+            (sandbox.op("c1").path, "fake/c1.tdn"),
+            (sandbox.op("c2").path, "fake/c2.tdn"),
         ]
+
         # Fake export: succeed with a stable dict so the "content unchanged"
         # path fires (skips actual file write)
         def fake_export(self_, root_path=None, output_file=None, **kwargs):
-            return {'success': True, 'tdn': {'version': '1.4', 'root': root_path}}
+            return {"success": True, "tdn": {"version": "1.4", "root": root_path}}
+
         tdn_class.ExportNetwork = fake_export
         # Fake read-existing - wrap in staticmethod() to preserve the
         # descriptor (otherwise other tests calling _read_existing_tdn via
         # an instance break with "takes 1 positional argument but 2 given").
-        tdn_class._read_existing_tdn = staticmethod(lambda path: {'version': '1.4'})
+        tdn_class._read_existing_tdn = staticmethod(lambda path: {"version": "1.4"})
         # Force content-equal to True so the write path is skipped - every
         # fake export takes the unchanged-skip branch and appends to `exported`
-        orig_equal = tdn_class.__dict__['_tdn_content_equal']  # staticmethod descriptor
+        orig_equal = tdn_class.__dict__["_tdn_content_equal"]  # staticmethod descriptor
         tdn_class._tdn_content_equal = staticmethod(lambda a, b: True)
 
-        execute_mod = op('/embody/Embody/execute').module
+        execute_mod = op("/embody/Embody/execute").module
 
         try:
             # Run the hook. Fix 3 should catch the crashing_strip exception.
             execute_mod.onProjectPreSave()
 
             # THE ASSERTION: storage must hold the full pre-staged list
-            stored = embody.fetch('_tdn_stripped_paths', None, search=False)
-            self.assertIsNotNone(stored,
+            stored = embody.fetch("_tdn_stripped_paths", None, search=False)
+            self.assertIsNotNone(
+                stored,
                 "Pre-stage failed: _tdn_stripped_paths is None after mid-strip crash. "
-                "Post-save would have nothing to restore.")
+                "Post-save would have nothing to restore.",
+            )
             # Compare paths only (rel_file_path was synthetic)
             stored_paths = [entry[0] for entry in stored]
             expected_paths = [p for p, _ in fake_tdn_comps]
-            self.assertEqual(set(stored_paths), set(expected_paths),
-                f"Expected all {len(expected_paths)} paths pre-staged, got: {stored_paths}")
+            self.assertEqual(
+                set(stored_paths),
+                set(expected_paths),
+                f"Expected all {len(expected_paths)} paths pre-staged, got: {stored_paths}",
+            )
 
             # And the crash was the expected one (the loop did reach strip #2)
-            self.assertEqual(len(strip_calls), 2,
-                f"Expected 2 strip calls before crash, got {len(strip_calls)}")
+            self.assertEqual(
+                len(strip_calls),
+                2,
+                f"Expected 2 strip calls before crash, got {len(strip_calls)}",
+            )
         finally:
             # Restore everything
             ext_class.Update = orig_update
@@ -382,8 +396,8 @@ class TestIssue21PreSaveBoundary(EmbodyTestCase):
             tdn_class._tdn_content_equal = orig_equal
             embody.par.Tdnmode = orig_tdnmode
             embody.par.Tdnstriponsave = orig_strip_on_save
-            embody.unstore('_tdn_stripped_paths')
-            embody.unstore('_tdn_pane_restore')
+            embody.unstore("_tdn_stripped_paths")
+            embody.unstore("_tdn_pane_restore")
 
     def test_onProjectPreSave_contains_exception_in_preamble(self):
         # Round-2 Agent 1 finding: the unstores and Perform Mode check used
@@ -395,13 +409,14 @@ class TestIssue21PreSaveBoundary(EmbodyTestCase):
         # read-only). Instead patch the EmbodyExt class so that
         # `parent.Embody.ext.Embody._performMode` raises during attribute
         # access - that lookup happens inside the preamble (line ~107).
-        execute_mod = op('/embody/Embody/execute').module
+        execute_mod = op("/embody/Embody/execute").module
         ext_class = type(self.embody_ext)
         # _performMode is a property in the class - replace it temporarily
-        original = ext_class.__dict__.get('_performMode')
+        original = ext_class.__dict__.get("_performMode")
 
         def boom_perform(self_):
             raise Exception("simulated preamble crash via _performMode access")
+
         ext_class._performMode = property(boom_perform)
         try:
             execute_mod.onProjectPreSave()
