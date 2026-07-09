@@ -1,23 +1,30 @@
 # parexec_filter: monitors filter textCOMP text parameter changes
 
+
 def onValueChange(par, prev):
-	me.parent().ext.ToolbarExt.OnFilterChanged()
-	return
+    me.parent().ext.ToolbarExt.OnFilterChanged()
+    return
+
 
 def onValuesChanged(changes):
-	return
+    return
+
 
 def onPulse(par):
-	return
+    return
+
 
 def onExpressionChange(par, val, prev):
-	return
+    return
+
 
 def onExportChange(par, val, prev):
-	return
+    return
+
 
 def onEnableChange(par, val, prev):
-	return
+    return
+
 
 def onModeChange(par, val, prev):
-	return
+    return

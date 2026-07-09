@@ -72,11 +72,10 @@ class TestTdnEnvelope(unittest.TestCase):
         envelope = tdn_envelope.wrap_tdn(tdn, "embody", slug="indent", version=1)
         text = tdn_envelope.to_clipboard_str(envelope)
 
-        self.assertIn("\n", text)            # multi-line == indented
-        self.assertIn("  ", text)            # has indentation
+        self.assertIn("\n", text)  # multi-line == indented
+        self.assertIn("  ", text)  # has indentation
         self.assertEqual(envelope["sha256"], tdn_envelope.tdn_sha256(tdn))
-        self.assertTrue(tdn_envelope.verify_envelope_integrity(
-            tdn_envelope.unwrap_clipboard(text)))
+        self.assertTrue(tdn_envelope.verify_envelope_integrity(tdn_envelope.unwrap_clipboard(text)))
 
     def test_unwrap_malformed_json_returns_none(self):
         self.assertIsNone(tdn_envelope.unwrap_clipboard("not json"))
@@ -108,14 +107,14 @@ class TestTdnEnvelope(unittest.TestCase):
 
     def test_resolve_name_from_network_path_basename(self):
         tdn = {"network_path": "/specimen_lab/murmuration"}
-        self.assertEqual(tdn_envelope.resolve_tdn_name(tdn, slug="ignored"),
-                         "murmuration")
+        self.assertEqual(tdn_envelope.resolve_tdn_name(tdn, slug="ignored"), "murmuration")
 
     def test_resolve_name_skips_root_path_and_uses_slug(self):
         # network_path "/" has no basename -> fall through to the slug
-        self.assertEqual(tdn_envelope.resolve_tdn_name({"network_path": "/"},
-                                                       slug="from-web"),
-                         "from-web")
+        self.assertEqual(
+            tdn_envelope.resolve_tdn_name({"network_path": "/"}, slug="from-web"),
+            "from-web",
+        )
 
     def test_resolve_name_returns_none_when_nothing_usable(self):
         self.assertIsNone(tdn_envelope.resolve_tdn_name({}))

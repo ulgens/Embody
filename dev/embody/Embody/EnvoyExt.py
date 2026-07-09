@@ -41,7 +41,7 @@ ENVOY_VERSION = "1.4.0"
 # to_thread.run_sync copies the caller's context into tool threads, so
 # tool functions and _execute_in_td read the same values. (None, None)
 # for clients that connect without a bridge (direct HTTP).
-_SESSION_CTX = contextvars.ContextVar('envoy_session', default=(None, None))
+_SESSION_CTX = contextvars.ContextVar("envoy_session", default=(None, None))
 
 # --- Multi-session Phase 2: touch map + peer advisories ---
 
@@ -49,29 +49,51 @@ _SESSION_CTX = contextvars.ContextVar('envoy_session', default=(None, None))
 # shared touch map; read operations still RECEIVE advisories but leave no
 # trace themselves.
 _WRITE_OPERATIONS = frozenset({
-    'create_op', 'delete_op', 'set_parameter', 'connect_ops',
-    'disconnect_op', 'copy_op', 'rename_op', 'execute_python',
-    'set_dat_content', 'edit_dat_content', 'set_op_flags',
-    'set_op_position', 'layout_children', 'externalize_op',
-    'remove_externalization_tag', 'save_externalization',
-    'create_extension', 'import_network', 'create_annotation',
-    'set_annotation', 'run_tests', 'batch_operations',
+    "create_op",
+    "delete_op",
+    "set_parameter",
+    "connect_ops",
+    "disconnect_op",
+    "copy_op",
+    "rename_op",
+    "execute_python",
+    "set_dat_content",
+    "edit_dat_content",
+    "set_op_flags",
+    "set_op_position",
+    "layout_children",
+    "externalize_op",
+    "remove_externalization_tag",
+    "save_externalization",
+    "create_extension",
+    "import_network",
+    "create_annotation",
+    "set_annotation",
+    "run_tests",
+    "batch_operations",
 })
 
 # Coarse scopes for operations whose footprint is not a single op path.
 _SPECIAL_SCOPES = {
-    'execute_python': 'project:python',
-    'run_tests': 'project:tests',
+    "execute_python": "project:python",
+    "run_tests": "project:tests",
 }
 
-_TOUCH_WINDOW_S = 600     # advisories consider touches this recent
-_CONFLICT_WINDOW_S = 60   # peer WRITE inside this + own WRITE = conflict
-_ADVISORY_DEDUP_S = 300   # same (peer, scope) advisory re-served after this
-_TOUCH_RING_CAP = 8       # touches kept per scope
-_TOUCH_SCOPE_CAP = 200    # scopes kept (evict oldest-touched beyond this)
+_TOUCH_WINDOW_S = 600  # advisories consider touches this recent
+_CONFLICT_WINDOW_S = 60  # peer WRITE inside this + own WRITE = conflict
+_ADVISORY_DEDUP_S = 300  # same (peer, scope) advisory re-served after this
+_TOUCH_RING_CAP = 8  # touches kept per scope
+_TOUCH_SCOPE_CAP = 200  # scopes kept (evict oldest-touched beyond this)
 
-_PATH_PARAM_KEYS = ('op_path', 'parent_path', 'source_path', 'dest_path',
-                    'target_path', 'comp_path', 'root_path')
+_PATH_PARAM_KEYS = (
+    "op_path",
+    "parent_path",
+    "source_path",
+    "dest_path",
+    "target_path",
+    "comp_path",
+    "root_path",
+)
 
 
 def _scope_overlaps(a: str, b: str) -> bool:
@@ -83,9 +105,9 @@ def _scope_overlaps(a: str, b: str) -> bool:
     """
     if a == b:
         return True
-    if a.startswith('/') and b.startswith('/'):
+    if a.startswith("/") and b.startswith("/"):
         shorter, longer = (a, b) if len(a) <= len(b) else (b, a)
-        return longer.startswith(shorter + '/')
+        return longer.startswith(shorter + "/")
     return False
 
 
@@ -100,25 +122,23 @@ def _scopes_for_operation(operation: str, params: dict, result=None) -> list:
     if special:
         scopes.append(special)
     params = params or {}
-    if operation == 'batch_operations':
-        for sub in (params.get('operations') or [])[:16]:
+    if operation == "batch_operations":
+        for sub in (params.get("operations") or [])[:16]:
             if isinstance(sub, dict):
-                scopes.extend(_scopes_for_operation(
-                    sub.get('tool', ''), sub.get('params') or {}))
+                scopes.extend(_scopes_for_operation(sub.get("tool", ""), sub.get("params") or {}))
     else:
         for key in _PATH_PARAM_KEYS:
             value = params.get(key)
-            if isinstance(value, str) and value.startswith('/'):
+            if isinstance(value, str) and value.startswith("/"):
                 scopes.append(value)
-        if operation == 'rename_op':
-            base = params.get('op_path')
-            new_name = params.get('new_name')
-            if (isinstance(base, str) and isinstance(new_name, str)
-                    and '/' in base):
-                scopes.append(base.rsplit('/', 1)[0] + '/' + new_name)
+        if operation == "rename_op":
+            base = params.get("op_path")
+            new_name = params.get("new_name")
+            if isinstance(base, str) and isinstance(new_name, str) and "/" in base:
+                scopes.append(base.rsplit("/", 1)[0] + "/" + new_name)
         if isinstance(result, dict):
-            created = result.get('path')
-            if isinstance(created, str) and created.startswith('/'):
+            created = result.get("path")
+            if isinstance(created, str) and created.startswith("/"):
                 scopes.append(created)
     seen = set()
     deduped = []
@@ -137,10 +157,15 @@ class EnvoyMCPServer:
     All TD operations are delegated to the main thread via queues.
     """
 
-    def __init__(self, request_queue: Optional[Queue], response_queue: Queue,
-                 add_to_refresh_queue: Callable[[dict], None], port: int = 9870,
-                 shutdown_event: Optional[Event] = None,
-                 startup_event: Optional[Event] = None) -> None:
+    def __init__(
+        self,
+        request_queue: Optional[Queue],
+        response_queue: Queue,
+        add_to_refresh_queue: Callable[[dict], None],
+        port: int = 9870,
+        shutdown_event: Optional[Event] = None,
+        startup_event: Optional[Event] = None,
+    ) -> None:
         self.request_queue: Optional[Queue] = request_queue
         self.response_queue: Queue = response_queue
         self.add_to_refresh_queue: Callable[[dict], None] = add_to_refresh_queue
@@ -159,30 +184,31 @@ class EnvoyMCPServer:
         # restarts (same pattern as sys._envoy_queues). Touched from the
         # ASGI middleware (event loop) and tool threads -- guard with
         # _sessions_lock. Pure Python only; never holds TD objects.
-        existing_sessions = getattr(sys, '_envoy_sessions', None)
+        existing_sessions = getattr(sys, "_envoy_sessions", None)
         self._sessions: dict = existing_sessions if isinstance(existing_sessions, dict) else {}
         sys._envoy_sessions = self._sessions
         # One shared lock guards _sessions AND _touches; it lives on sys so
         # the MAIN thread (touch recording, advisory scans) and the worker
         # (registry, get_sessions) coordinate across reinits.
-        existing_lock = getattr(sys, '_envoy_sessions_lock', None)
+        existing_lock = getattr(sys, "_envoy_sessions_lock", None)
         self._sessions_lock: Lock = existing_lock if existing_lock is not None else Lock()
         sys._envoy_sessions_lock = self._sessions_lock
         # Touch map: scope -> ring of {'sid', 'tool', 'ts'} for recent WRITE
         # operations. Written by the main thread, read by get_sessions.
-        existing_touches = getattr(sys, '_envoy_touches', None)
+        existing_touches = getattr(sys, "_envoy_touches", None)
         self._touches: dict = existing_touches if isinstance(existing_touches, dict) else {}
         sys._envoy_touches = self._touches
         # Claim leases (Phase 3): scope -> {'sid','label','note','ts','ttl'}.
         # Cooperative write leases; guarded by the same shared lock.
-        existing_claims = getattr(sys, '_envoy_claims', None)
+        existing_claims = getattr(sys, "_envoy_claims", None)
         self._claims: dict = existing_claims if isinstance(existing_claims, dict) else {}
         sys._envoy_claims = self._claims
 
-        self._docs_state = {'resolved': False, 'root': None, 'index': None, 'cache': {}}
+        self._docs_state = {"resolved": False, "root": None, "index": None, "cache": {}}
 
         # Import mcp only when server is instantiated (in worker thread)
         from mcp.server.fastmcp import FastMCP, Image
+
         self._Image = Image  # Store for use in tool functions
         # The MCP SDK auto-enables this for host="127.0.0.1" since about
         # 1.10, but pin it explicitly so a default change cannot silently
@@ -191,6 +217,7 @@ class EnvoyMCPServer:
         transport_security = None
         try:
             from mcp.server.transport_security import TransportSecuritySettings
+
             transport_security = TransportSecuritySettings(
                 enable_dns_rebinding_protection=True,
                 allowed_hosts=["127.0.0.1:*", "localhost:*", "[::1]:*"],
@@ -201,20 +228,21 @@ class EnvoyMCPServer:
                 ],
             )
         except Exception as e:
-            print(f'[Envoy][WARNING] Transport security settings unavailable; '
-                  f'continuing without explicit FastMCP transport_security: {e}')
+            print(
+                f"[Envoy][WARNING] Transport security settings unavailable; "
+                f"continuing without explicit FastMCP transport_security: {e}"
+            )
         mcp_kwargs = {
-            'host': "127.0.0.1",
-            'port': port,
-            'stateless_http': True,
+            "host": "127.0.0.1",
+            "port": port,
+            "stateless_http": True,
         }
         if transport_security is not None:
-            mcp_kwargs['transport_security'] = transport_security
+            mcp_kwargs["transport_security"] = transport_security
         self.mcp = FastMCP("Envoy", **mcp_kwargs)
         self._register_tools()
 
-    def _touch_session(self, sid: str, label: str = None,
-                       operation: str = None) -> None:
+    def _touch_session(self, sid: str, label: str = None, operation: str = None) -> None:
         """Register or refresh a session in the presence registry.
 
         Called from the ASGI middleware on every headered HTTP request and
@@ -227,23 +255,28 @@ class EnvoyMCPServer:
             if entry is None:
                 pid = None
                 try:
-                    pid = int(str(sid).split('-', 1)[0])
+                    pid = int(str(sid).split("-", 1)[0])
                 except Exception:
                     pass
-                entry = {'sid': sid, 'label': label or sid, 'pid': pid,
-                         'first_seen': now, 'requests': 0, 'last_tool': None}
+                entry = {
+                    "sid": sid,
+                    "label": label or sid,
+                    "pid": pid,
+                    "first_seen": now,
+                    "requests": 0,
+                    "last_tool": None,
+                }
                 self._sessions[sid] = entry
             if label:
-                entry['label'] = label
+                entry["label"] = label
             if operation:
-                entry['last_tool'] = operation
+                entry["last_tool"] = operation
             else:
-                entry['requests'] += 1
-            entry['last_seen'] = now
+                entry["requests"] += 1
+            entry["last_seen"] = now
             # Lazy prune: drop sessions silent for over an hour.
             if len(self._sessions) > 8:
-                for stale_sid in [k for k, v in self._sessions.items()
-                                  if now - v.get('last_seen', 0) > 3600]:
+                for stale_sid in [k for k, v in self._sessions.items() if now - v.get("last_seen", 0) > 3600]:
                     del self._sessions[stale_sid]
 
     def _sessions_snapshot(self) -> dict:
@@ -254,113 +287,118 @@ class EnvoyMCPServer:
             sessions = [dict(v) for v in self._sessions.values()]
             claims_by = {}
             for held_scope, claim in self._claims.items():
-                claims_by.setdefault(claim['sid'], []).append({
-                    'scope': held_scope,
-                    'note': claim.get('note', ''),
-                    'expires_in_s': round(claim['ts'] + claim['ttl'] - now, 1)})
+                claims_by.setdefault(claim["sid"], []).append({
+                    "scope": held_scope,
+                    "note": claim.get("note", ""),
+                    "expires_in_s": round(claim["ts"] + claim["ttl"] - now, 1),
+                })
             touched_by = {}
             for scope, ring in self._touches.items():
                 for touch in ring:
-                    touched_by.setdefault(touch['sid'], []).append(
-                        (touch['ts'], scope, touch['tool']))
+                    touched_by.setdefault(touch["sid"], []).append((touch["ts"], scope, touch["tool"]))
         for e in sessions:
-            idle = now - e.get('last_seen', now)
-            e['idle_s'] = round(idle, 1)
-            e['stale'] = idle > 90
-            recent = sorted(touched_by.get(e['sid'], []), reverse=True)[:5]
+            idle = now - e.get("last_seen", now)
+            e["idle_s"] = round(idle, 1)
+            e["stale"] = idle > 90
+            recent = sorted(touched_by.get(e["sid"], []), reverse=True)[:5]
             if recent:
-                e['recent_scopes'] = [
-                    {'scope': scope, 'tool': tool, 'age_s': round(now - ts, 1)}
-                    for ts, scope, tool in recent]
-            held = claims_by.get(e['sid'])
+                e["recent_scopes"] = [
+                    {"scope": scope, "tool": tool, "age_s": round(now - ts, 1)} for ts, scope, tool in recent
+                ]
+            held = claims_by.get(e["sid"])
             if held:
-                e['claims'] = held
-        sessions.sort(key=lambda e: e.get('last_seen', 0), reverse=True)
-        return {'sessions': sessions, 'count': len(sessions)}
+                e["claims"] = held
+        sessions.sort(key=lambda e: e.get("last_seen", 0), reverse=True)
+        return {"sessions": sessions, "count": len(sessions)}
 
     def _prune_claims_locked(self, now):
         """Drop expired claims and claims whose holder went silent for 10
         minutes. Caller holds _sessions_lock."""
         for held_scope in list(self._claims):
             claim = self._claims[held_scope]
-            holder = self._sessions.get(claim['sid'])
-            holder_seen = holder.get('last_seen', 0) if holder else 0
+            holder = self._sessions.get(claim["sid"])
+            holder_seen = holder.get("last_seen", 0) if holder else 0
             # '_anon' holders (headerless clients) are never in the
             # registry -- for them only the TTL applies, or their claims
             # would evaporate on the next prune.
-            holder_silent = (claim['sid'] != '_anon'
-                             and now - holder_seen > 600)
-            if now > claim['ts'] + claim['ttl'] or holder_silent:
+            holder_silent = claim["sid"] != "_anon" and now - holder_seen > 600
+            if now > claim["ts"] + claim["ttl"] or holder_silent:
                 del self._claims[held_scope]
 
     def _claim_scope(self, sid, label, scope, note, ttl):
         """Grant/refuse a cooperative write lease. Worker-side pure Python."""
-        scope = (scope or '').strip()
-        if not (scope.startswith('/') or scope.startswith('file:')
-                or scope.startswith('project:')):
-            return {'error': "scope must be an op path ('/comp/op'), "
-                             "'file:<repo-relative-path>', or 'project:<name>'"}
-        if scope.startswith('/') and len(scope) > 1:
-            scope = scope.rstrip('/')
+        scope = (scope or "").strip()
+        if not (scope.startswith("/") or scope.startswith("file:") or scope.startswith("project:")):
+            return {"error": "scope must be an op path ('/comp/op'), 'file:<repo-relative-path>', or 'project:<name>'"}
+        if scope.startswith("/") and len(scope) > 1:
+            scope = scope.rstrip("/")
         try:
             ttl = max(30, min(3600, int(ttl)))
         except Exception:
             ttl = 300
-        me = sid or '_anon'
+        me = sid or "_anon"
         now = time.time()
         with self._sessions_lock:
             self._prune_claims_locked(now)
             for held_scope, claim in self._claims.items():
-                if claim['sid'] == me:
+                if claim["sid"] == me:
                     continue
                 if _scope_overlaps(scope, held_scope):
-                    return {'granted': False,
-                            'holder': {
-                                'label': claim.get('label') or claim['sid'],
-                                'scope': held_scope,
-                                'note': claim.get('note', ''),
-                                'age_s': round(now - claim['ts'], 1),
-                                'expires_in_s': round(
-                                    claim['ts'] + claim['ttl'] - now, 1)},
-                            'hint': 'Coordinate with the holder, work in a '
-                                    'different subtree, or wait for expiry.'}
-            self._claims[scope] = {'sid': me, 'label': label or me,
-                                   'note': (note or '')[:200],
-                                   'ts': now, 'ttl': ttl}
+                    return {
+                        "granted": False,
+                        "holder": {
+                            "label": claim.get("label") or claim["sid"],
+                            "scope": held_scope,
+                            "note": claim.get("note", ""),
+                            "age_s": round(now - claim["ts"], 1),
+                            "expires_in_s": round(claim["ts"] + claim["ttl"] - now, 1),
+                        },
+                        "hint": "Coordinate with the holder, work in a different subtree, or wait for expiry.",
+                    }
+            self._claims[scope] = {
+                "sid": me,
+                "label": label or me,
+                "note": (note or "")[:200],
+                "ts": now,
+                "ttl": ttl,
+            }
             if len(self._claims) > 64:
-                oldest_first = sorted(self._claims.items(),
-                                      key=lambda kv: kv[1]['ts'])
-                for stale_scope, _claim in oldest_first[:len(self._claims) - 64]:
+                oldest_first = sorted(self._claims.items(), key=lambda kv: kv[1]["ts"])
+                for stale_scope, _claim in oldest_first[: len(self._claims) - 64]:
                     del self._claims[stale_scope]
-        return {'granted': True, 'scope': scope, 'ttl': ttl,
-                'renewal': 'your own tool calls touching this scope renew '
-                           'the lease; it expires on TTL or session silence'}
+        return {
+            "granted": True,
+            "scope": scope,
+            "ttl": ttl,
+            "renewal": "your own tool calls touching this scope renew the lease; it expires on TTL or session silence",
+        }
 
     def _release_scope(self, sid, scope):
         """Release a lease held by this session. Worker-side pure Python."""
-        me = sid or '_anon'
-        scope = (scope or '').strip()
-        if scope.startswith('/') and len(scope) > 1:
-            scope = scope.rstrip('/')
+        me = sid or "_anon"
+        scope = (scope or "").strip()
+        if scope.startswith("/") and len(scope) > 1:
+            scope = scope.rstrip("/")
         with self._sessions_lock:
             claim = self._claims.get(scope)
             if claim is None:
-                return {'released': False, 'reason': 'no claim on that scope'}
-            if claim['sid'] != me:
-                return {'released': False,
-                        'reason': 'held by another session',
-                        'holder': claim.get('label') or claim['sid']}
+                return {"released": False, "reason": "no claim on that scope"}
+            if claim["sid"] != me:
+                return {
+                    "released": False,
+                    "reason": "held by another session",
+                    "holder": claim.get("label") or claim["sid"],
+                }
             del self._claims[scope]
-        return {'released': True, 'scope': scope}
+        return {"released": True, "scope": scope}
 
-    def _execute_in_td(self, operation: str, params: dict,
-                       timeout: float = 30.0) -> dict:
+    def _execute_in_td(self, operation: str, params: dict, timeout: float = 30.0) -> dict:
         """Queue operation to main thread and wait for response"""
         with self.lock:
             request_id = self.request_counter
             self.request_counter += 1
             event = Event()
-            self.pending_requests[request_id] = {'event': event, 'result': None}
+            self.pending_requests[request_id] = {"event": event, "result": None}
 
         # Attribute the operation to the calling session (if the request
         # arrived through a bridge that sent identity headers).
@@ -369,38 +407,38 @@ class EnvoyMCPServer:
             self._touch_session(sid, operation=operation)
 
         # Queue request to main thread via Thread Manager's refresh queue
-        self.add_to_refresh_queue({
-            'id': request_id,
-            'operation': operation,
-            'params': params,
-            'sid': sid
-        })
+        self.add_to_refresh_queue({"id": request_id, "operation": operation, "params": params, "sid": sid})
 
         # Wait for response (with timeout)
         if not event.wait(timeout=timeout):
             with self.lock:
                 del self.pending_requests[request_id]
-            return {'error': f'Operation timed out after {timeout} seconds. '
-                    f'The operation may still execute on the main thread.'}
+            return {
+                "error": f"Operation timed out after {timeout} seconds. "
+                f"The operation may still execute on the main thread."
+            }
 
         with self.lock:
-            result = self.pending_requests[request_id].get('result', {'error': 'No result'})
+            result = self.pending_requests[request_id].get("result", {"error": "No result"})
             del self.pending_requests[request_id]
         return result
 
     def check_responses(self, first_response: dict = None) -> None:
         """Check for responses from main thread"""
+
         def process_response(response):
-            request_id = response['id']
+            request_id = response["id"]
             with self.lock:
                 pending = self.pending_requests.get(request_id)
             if pending is not None:
-                pending['result'] = response['result']
-                pending['event'].set()
+                pending["result"] = response["result"]
+                pending["event"].set()
             else:
                 # Orphaned response -- request already timed out and was removed
-                print(f'[Envoy][WARNING] Orphaned response for request {request_id} '
-                      f'(likely timed out). Operation still executed on main thread.')
+                print(
+                    f"[Envoy][WARNING] Orphaned response for request {request_id} "
+                    f"(likely timed out). Operation still executed on main thread."
+                )
 
         if first_response is not None:
             process_response(first_response)
@@ -415,9 +453,9 @@ class EnvoyMCPServer:
                 try:
                     expected = isinstance(e, Empty)
                 except NameError:
-                    expected = type(e).__name__ == 'Empty'
+                    expected = type(e).__name__ == "Empty"
                 if not expected:
-                    print(f'[Envoy][WARNING] check_responses unexpected error: {type(e).__name__}: {e}')
+                    print(f"[Envoy][WARNING] check_responses unexpected error: {type(e).__name__}: {e}")
                 break
             process_response(response)
 
@@ -441,11 +479,10 @@ class EnvoyMCPServer:
             Returns:
                 Dict with path, name, and type of created operator
             """
-            return self._execute_in_td('create_op', {
-                'parent_path': parent_path,
-                'op_type': op_type,
-                'name': name
-            })
+            return self._execute_in_td(
+                "create_op",
+                {"parent_path": parent_path, "op_type": op_type, "name": name},
+            )
 
         @self.mcp.tool()
         def delete_op(op_path: str, override: bool = False) -> dict:
@@ -460,8 +497,7 @@ class EnvoyMCPServer:
             Returns:
                 Dict with success status
             """
-            return self._execute_in_td('delete_op', {'op_path': op_path,
-                                                     'override': override})
+            return self._execute_in_td("delete_op", {"op_path": op_path, "override": override})
 
         @self.mcp.tool()
         def get_op(op_path: str, include_defaults: bool = False) -> dict:
@@ -475,15 +511,23 @@ class EnvoyMCPServer:
             Returns:
                 Dict with type, family, parameters, inputs, outputs, children
             """
-            return self._execute_in_td('get_op', {
-                'op_path': op_path,
-                'include_defaults': include_defaults,
-            })
+            return self._execute_in_td(
+                "get_op",
+                {
+                    "op_path": op_path,
+                    "include_defaults": include_defaults,
+                },
+            )
 
         @self.mcp.tool()
-        def set_parameter(op_path: str, par_name: str, value: str = None,
-                         mode: str = None, expr: str = None,
-                         bind_expr: str = None) -> dict:
+        def set_parameter(
+            op_path: str,
+            par_name: str,
+            value: str = None,
+            mode: str = None,
+            expr: str = None,
+            bind_expr: str = None,
+        ) -> dict:
             """
             Set a parameter value, expression, bind expression, or mode on an operator.
 
@@ -503,20 +547,28 @@ class EnvoyMCPServer:
             Returns:
                 Dict with success status and new value
             """
-            return self._execute_in_td('set_parameter', {
-                'op_path': op_path,
-                'par_name': par_name,
-                'value': value,
-                'mode': mode,
-                'expr': expr,
-                'bind_expr': bind_expr
-            })
+            return self._execute_in_td(
+                "set_parameter",
+                {
+                    "op_path": op_path,
+                    "par_name": par_name,
+                    "value": value,
+                    "mode": mode,
+                    "expr": expr,
+                    "bind_expr": bind_expr,
+                },
+            )
 
         @self.mcp.tool()
-        def get_parameter(op_path: str, par_name: str = None,
-                         search: str = None, search_in: str = 'any',
-                         depth: int = 2, max_results: int = 50,
-                         details: bool = False) -> dict:
+        def get_parameter(
+            op_path: str,
+            par_name: str = None,
+            search: str = None,
+            search_in: str = "any",
+            depth: int = 2,
+            max_results: int = 50,
+            details: bool = False,
+        ) -> dict:
             """
             Read one parameter compactly, or search parameters by glob/substring.
 
@@ -536,20 +588,27 @@ class EnvoyMCPServer:
             Returns:
                 Compact parameter info or search hits
             """
-            return self._execute_in_td('get_parameter', {
-                'op_path': op_path,
-                'par_name': par_name,
-                'search': search,
-                'search_in': search_in,
-                'depth': depth,
-                'max_results': max_results,
-                'details': details,
-            })
+            return self._execute_in_td(
+                "get_parameter",
+                {
+                    "op_path": op_path,
+                    "par_name": par_name,
+                    "search": search,
+                    "search_in": search_in,
+                    "depth": depth,
+                    "max_results": max_results,
+                    "details": details,
+                },
+            )
 
         @self.mcp.tool()
-        def connect_ops(source_path: str, dest_path: str,
-                             source_index: int = 0, dest_index: int = 0,
-                             comp: bool = False) -> dict:
+        def connect_ops(
+            source_path: str,
+            dest_path: str,
+            source_index: int = 0,
+            dest_index: int = 0,
+            comp: bool = False,
+        ) -> dict:
             """
             Connect two operators with a wire.
 
@@ -563,17 +622,19 @@ class EnvoyMCPServer:
             Returns:
                 Dict with success status
             """
-            return self._execute_in_td('connect_ops', {
-                'source_path': source_path,
-                'dest_path': dest_path,
-                'source_index': source_index,
-                'dest_index': dest_index,
-                'comp': comp
-            })
+            return self._execute_in_td(
+                "connect_ops",
+                {
+                    "source_path": source_path,
+                    "dest_path": dest_path,
+                    "source_index": source_index,
+                    "dest_index": dest_index,
+                    "comp": comp,
+                },
+            )
 
         @self.mcp.tool()
-        def disconnect_op(op_path: str, input_index: int = 0,
-                                comp: bool = False) -> dict:
+        def disconnect_op(op_path: str, input_index: int = 0, comp: bool = False) -> dict:
             """
             Disconnect an operator's input.
 
@@ -585,16 +646,18 @@ class EnvoyMCPServer:
             Returns:
                 Dict with success status
             """
-            return self._execute_in_td('disconnect_op', {
-                'op_path': op_path,
-                'input_index': input_index,
-                'comp': comp
-            })
+            return self._execute_in_td(
+                "disconnect_op",
+                {"op_path": op_path, "input_index": input_index, "comp": comp},
+            )
 
         @self.mcp.tool()
-        def query_network(parent_path: str = "/", recursive: bool = False,
-                         op_type: str = None,
-                         include_utility: bool = False) -> dict:
+        def query_network(
+            parent_path: str = "/",
+            recursive: bool = False,
+            op_type: str = None,
+            include_utility: bool = False,
+        ) -> dict:
             """
             List operators in a network/container.
 
@@ -607,12 +670,15 @@ class EnvoyMCPServer:
             Returns:
                 Dict with operator path/type/family/depth; name = last path segment
             """
-            return self._execute_in_td('query_network', {
-                'parent_path': parent_path,
-                'recursive': recursive,
-                'op_type': op_type,
-                'include_utility': include_utility,
-            })
+            return self._execute_in_td(
+                "query_network",
+                {
+                    "parent_path": parent_path,
+                    "recursive": recursive,
+                    "op_type": op_type,
+                    "include_utility": include_utility,
+                },
+            )
 
         @self.mcp.tool()
         def copy_op(source_path: str, dest_parent: str, new_name: str = None) -> dict:
@@ -630,11 +696,14 @@ class EnvoyMCPServer:
             Returns:
                 Dict with path to new operator
             """
-            return self._execute_in_td('copy_op', {
-                'source_path': source_path,
-                'dest_parent': dest_parent,
-                'new_name': new_name
-            })
+            return self._execute_in_td(
+                "copy_op",
+                {
+                    "source_path": source_path,
+                    "dest_parent": dest_parent,
+                    "new_name": new_name,
+                },
+            )
 
         @self.mcp.tool()
         def get_connections(op_path: str) -> dict:
@@ -647,7 +716,7 @@ class EnvoyMCPServer:
             Returns:
                 Dict with inputs and outputs lists
             """
-            return self._execute_in_td('get_connections', {'op_path': op_path})
+            return self._execute_in_td("get_connections", {"op_path": op_path})
 
         @self.mcp.tool()
         def execute_python(code: str) -> dict:
@@ -661,7 +730,7 @@ class EnvoyMCPServer:
             Returns:
                 Dict with execution result or error
             """
-            return self._execute_in_td('execute_python', {'code': code})
+            return self._execute_in_td("execute_python", {"code": code})
 
         # === Introspection & Diagnostics Tools ===
 
@@ -673,7 +742,7 @@ class EnvoyMCPServer:
             Returns:
                 Dict with TD version, build, OS info, and Envoy/Embody versions
             """
-            return self._execute_in_td('get_td_info', {})
+            return self._execute_in_td("get_td_info", {})
 
         @self.mcp.tool()
         def get_op_errors(op_path: str, recurse: bool = True) -> dict:
@@ -688,14 +757,10 @@ class EnvoyMCPServer:
             Returns:
                 Dict with structured error and warning lists
             """
-            return self._execute_in_td('get_op_errors', {
-                'op_path': op_path,
-                'recurse': recurse
-            })
+            return self._execute_in_td("get_op_errors", {"op_path": op_path, "recurse": recurse})
 
         @self.mcp.tool()
-        def exec_op_method(op_path: str, method: str,
-                            args: list = None, kwargs: dict = None) -> dict:
+        def exec_op_method(op_path: str, method: str, args: list = None, kwargs: dict = None) -> dict:
             """
             Call a method on a TouchDesigner operator.
             Example: exec_op_method("/project1/table1", "appendRow", args=[["a", "b", "c"]])
@@ -709,12 +774,15 @@ class EnvoyMCPServer:
             Returns:
                 Dict with method result
             """
-            return self._execute_in_td('exec_op_method', {
-                'op_path': op_path,
-                'method': method,
-                'args': args or [],
-                'kwargs': kwargs or {}
-            })
+            return self._execute_in_td(
+                "exec_op_method",
+                {
+                    "op_path": op_path,
+                    "method": method,
+                    "args": args or [],
+                    "kwargs": kwargs or {},
+                },
+            )
 
         @self.mcp.tool()
         def get_td_classes() -> dict:
@@ -725,7 +793,7 @@ class EnvoyMCPServer:
             Returns:
                 Dict with list of class names and descriptions
             """
-            return self._execute_in_td('get_td_classes', {})
+            return self._execute_in_td("get_td_classes", {})
 
         @self.mcp.tool()
         def get_td_class_details(class_name: str) -> dict:
@@ -739,9 +807,7 @@ class EnvoyMCPServer:
             Returns:
                 Dict with class methods, properties, and descriptions
             """
-            return self._execute_in_td('get_td_class_details', {
-                'class_name': class_name
-            })
+            return self._execute_in_td("get_td_class_details", {"class_name": class_name})
 
         @self.mcp.tool()
         def get_module_help(module_name: str) -> dict:
@@ -755,13 +821,15 @@ class EnvoyMCPServer:
             Returns:
                 Dict with module name and help text
             """
-            return self._execute_in_td('get_module_help', {
-                'module_name': module_name
-            })
+            return self._execute_in_td("get_module_help", {"module_name": module_name})
 
         @self.mcp.tool()
-        def get_docs(query: str, section: str = None, source: str = 'auto',
-                     max_chars: int = 20000) -> dict:
+        def get_docs(
+            query: str,
+            section: str = None,
+            source: str = "auto",
+            max_chars: int = 20000,
+        ) -> dict:
             """Look up official TouchDesigner documentation (docs.derivative.ca).
 
             Resolves operator pages ("Movie File In TOP", "moviefileinTOP"), Python
@@ -789,7 +857,7 @@ class EnvoyMCPServer:
             """Search for an operator by name in the TouchDesigner project."""
             msg = f'Use the "query_network" and "get_op" tools to search for operators named "{op_name}" in the TouchDesigner project.'
             if op_type:
-                msg += f' Filter by type: {op_type}.'
+                msg += f" Filter by type: {op_type}."
             return msg
 
         @self.mcp.prompt()
@@ -806,24 +874,24 @@ class EnvoyMCPServer:
         def create_extension_guide() -> str:
             """Guide for creating TouchDesigner extensions with proper patterns."""
             return (
-                'To create a TouchDesigner extension:\n\n'
+                "To create a TouchDesigner extension:\n\n"
                 '1. Use the "create_extension" tool with a class_name and parent_path.\n'
-                '   - Set existing_comp=True to add an extension to an existing COMP.\n'
+                "   - Set existing_comp=True to add an extension to an existing COMP.\n"
                 '   - Provide custom code via the "code" parameter, or omit for boilerplate.\n\n'
-                '2. Extension class conventions:\n'
-                '   - __init__(self, ownerComp) is required\n'
-                '   - Capitalized methods are promoted: op.CompName.Method()\n'
-                '   - Lowercase methods need: op.CompName.ext.ClassName.method()\n'
-                '   - Store the owner as self.ownerComp\n\n'
-                '3. TD auto-reinitializes extensions when their source DATs change.\n'
+                "2. Extension class conventions:\n"
+                "   - __init__(self, ownerComp) is required\n"
+                "   - Capitalized methods are promoted: op.CompName.Method()\n"
+                "   - Lowercase methods need: op.CompName.ext.ClassName.method()\n"
+                "   - Store the owner as self.ownerComp\n\n"
+                "3. TD auto-reinitializes extensions when their source DATs change.\n"
                 '   To force a reinit: exec_op_method on the COMP, method="initializeExtensions".\n'
-                '   Implement onDestroyTD(self) for clean teardown of old instances.\n'
-                '   Use onInitTD(self) for post-init setup needing a fully-cooked network.\n\n'
-                '4. Common patterns:\n'
+                "   Implement onDestroyTD(self) for clean teardown of old instances.\n"
+                "   Use onInitTD(self) for post-init setup needing a fully-cooked network.\n\n"
+                "4. Common patterns:\n"
                 '   - Child ops: self.ownerComp.op("childName")\n'
-                '   - Parameters: self.ownerComp.par.paramName\n'
+                "   - Parameters: self.ownerComp.par.paramName\n"
                 '   - Deferred execution: run("code", delayFrames=1)\n\n'
-                '5. The extension text DAT must be INSIDE the COMP it extends.'
+                "5. The extension text DAT must be INSIDE the COMP it extends."
             )
 
         # === DAT Content Tools ===
@@ -841,15 +909,16 @@ class EnvoyMCPServer:
             Returns:
                 Dict with DAT content (text string or table rows/cols)
             """
-            return self._execute_in_td('get_dat_content', {
-                'op_path': op_path,
-                'format': format
-            })
+            return self._execute_in_td("get_dat_content", {"op_path": op_path, "format": format})
 
         @self.mcp.tool()
-        def set_dat_content(op_path: str, text: str = None,
-                           rows: list = None, clear: bool = False,
-                           confirm_wipe: bool = False) -> dict:
+        def set_dat_content(
+            op_path: str,
+            text: str = None,
+            rows: list = None,
+            clear: bool = False,
+            confirm_wipe: bool = False,
+        ) -> dict:
             """
             Replace a DAT's entire text or table content.
 
@@ -865,18 +934,25 @@ class EnvoyMCPServer:
             Returns:
                 Dict with success status, or {'error': ...} if a guard trips
             """
-            return self._execute_in_td('set_dat_content', {
-                'op_path': op_path,
-                'text': text,
-                'rows': rows,
-                'clear': clear,
-                'confirm_wipe': confirm_wipe,
-            })
+            return self._execute_in_td(
+                "set_dat_content",
+                {
+                    "op_path": op_path,
+                    "text": text,
+                    "rows": rows,
+                    "clear": clear,
+                    "confirm_wipe": confirm_wipe,
+                },
+            )
 
         @self.mcp.tool()
-        def edit_dat_content(op_path: str, old_string: str,
-                             new_string: str, replace_all: bool = False,
-                             confirm_wipe: bool = False) -> dict:
+        def edit_dat_content(
+            op_path: str,
+            old_string: str,
+            new_string: str,
+            replace_all: bool = False,
+            confirm_wipe: bool = False,
+        ) -> dict:
             """
             Replace text in a DAT without sending the whole DAT.
 
@@ -893,13 +969,16 @@ class EnvoyMCPServer:
             Returns:
                 Dict with success, path, replacements, numRows, and numCols
             """
-            return self._execute_in_td('edit_dat_content', {
-                'op_path': op_path,
-                'old_string': old_string,
-                'new_string': new_string,
-                'replace_all': replace_all,
-                'confirm_wipe': confirm_wipe,
-            })
+            return self._execute_in_td(
+                "edit_dat_content",
+                {
+                    "op_path": op_path,
+                    "old_string": old_string,
+                    "new_string": new_string,
+                    "replace_all": replace_all,
+                    "confirm_wipe": confirm_wipe,
+                },
+            )
 
         # === Operator Flags Tools ===
 
@@ -914,14 +993,21 @@ class EnvoyMCPServer:
             Returns:
                 Dict with all flag states
             """
-            return self._execute_in_td('get_op_flags', {'op_path': op_path})
+            return self._execute_in_td("get_op_flags", {"op_path": op_path})
 
         @self.mcp.tool()
-        def set_op_flags(op_path: str, bypass: bool = None, lock: bool = None,
-                        display: bool = None, render: bool = None,
-                        viewer: bool = None, current: bool = None,
-                        expose: bool = None, allowCooking: bool = None,
-                        selected: bool = None) -> dict:
+        def set_op_flags(
+            op_path: str,
+            bypass: bool = None,
+            lock: bool = None,
+            display: bool = None,
+            render: bool = None,
+            viewer: bool = None,
+            current: bool = None,
+            expose: bool = None,
+            allowCooking: bool = None,
+            selected: bool = None,
+        ) -> dict:
             """
             Set one or more flags/properties on an operator.
 
@@ -940,18 +1026,21 @@ class EnvoyMCPServer:
             Returns:
                 Dict with success status and updated flags
             """
-            return self._execute_in_td('set_op_flags', {
-                'op_path': op_path,
-                'bypass': bypass,
-                'lock': lock,
-                'display': display,
-                'render': render,
-                'viewer': viewer,
-                'current': current,
-                'expose': expose,
-                'allowCooking': allowCooking,
-                'selected': selected
-            })
+            return self._execute_in_td(
+                "set_op_flags",
+                {
+                    "op_path": op_path,
+                    "bypass": bypass,
+                    "lock": lock,
+                    "display": display,
+                    "render": render,
+                    "viewer": viewer,
+                    "current": current,
+                    "expose": expose,
+                    "allowCooking": allowCooking,
+                    "selected": selected,
+                },
+            )
 
         # === Node Positioning & Layout Tools ===
 
@@ -966,7 +1055,7 @@ class EnvoyMCPServer:
             Returns:
                 Dict with nodeX, nodeY, nodeWidth, nodeHeight, color, comment
             """
-            return self._execute_in_td('get_op_position', {'op_path': op_path})
+            return self._execute_in_td("get_op_position", {"op_path": op_path})
 
         @self.mcp.tool()
         def get_network_layout(comp_path: str, include_annotations: bool = True) -> dict:
@@ -983,15 +1072,21 @@ class EnvoyMCPServer:
                 companions carry dockedTo (their host's name) so the Verify
                 step can confirm every dock hugs its host.
             """
-            return self._execute_in_td('get_network_layout', {
-                'comp_path': comp_path,
-                'include_annotations': include_annotations
-            })
+            return self._execute_in_td(
+                "get_network_layout",
+                {"comp_path": comp_path, "include_annotations": include_annotations},
+            )
 
         @self.mcp.tool()
-        def set_op_position(op_path: str, x: int = None, y: int = None,
-                           width: int = None, height: int = None,
-                           color: list = None, comment: str = None) -> dict:
+        def set_op_position(
+            op_path: str,
+            x: int = None,
+            y: int = None,
+            width: int = None,
+            height: int = None,
+            color: list = None,
+            comment: str = None,
+        ) -> dict:
             """
             Set an operator's position, size, color, or comment in the network editor.
 
@@ -1011,15 +1106,18 @@ class EnvoyMCPServer:
             Returns:
                 Dict with success status and new position
             """
-            return self._execute_in_td('set_op_position', {
-                'op_path': op_path,
-                'x': x,
-                'y': y,
-                'width': width,
-                'height': height,
-                'color': color,
-                'comment': comment
-            })
+            return self._execute_in_td(
+                "set_op_position",
+                {
+                    "op_path": op_path,
+                    "x": x,
+                    "y": y,
+                    "width": width,
+                    "height": height,
+                    "color": color,
+                    "comment": comment,
+                },
+            )
 
         @self.mcp.tool()
         def layout_children(op_path: str) -> dict:
@@ -1032,17 +1130,24 @@ class EnvoyMCPServer:
             Returns:
                 Dict with success status
             """
-            return self._execute_in_td('layout_children', {'op_path': op_path})
+            return self._execute_in_td("layout_children", {"op_path": op_path})
 
         # === Annotation Tools ===
 
         @self.mcp.tool()
-        def create_annotation(parent_path: str, mode: str = "annotate",
-                              text: str = "", title: str = "",
-                              x: int = None, y: int = None,
-                              width: int = None, height: int = None,
-                              color: list = None, opacity: float = None,
-                              name: str = None) -> dict:
+        def create_annotation(
+            parent_path: str,
+            mode: str = "annotate",
+            text: str = "",
+            title: str = "",
+            x: int = None,
+            y: int = None,
+            width: int = None,
+            height: int = None,
+            color: list = None,
+            opacity: float = None,
+            name: str = None,
+        ) -> dict:
             """
             Create a Comment, Network Box, or Annotate in the network editor.
 
@@ -1062,19 +1167,22 @@ class EnvoyMCPServer:
             Returns:
                 Dict with path, name, mode, and position of created annotation
             """
-            return self._execute_in_td('create_annotation', {
-                'parent_path': parent_path,
-                'mode': mode,
-                'text': text,
-                'title': title,
-                'x': x,
-                'y': y,
-                'width': width,
-                'height': height,
-                'color': color,
-                'opacity': opacity,
-                'name': name,
-            })
+            return self._execute_in_td(
+                "create_annotation",
+                {
+                    "parent_path": parent_path,
+                    "mode": mode,
+                    "text": text,
+                    "title": title,
+                    "x": x,
+                    "y": y,
+                    "width": width,
+                    "height": height,
+                    "color": color,
+                    "opacity": opacity,
+                    "name": name,
+                },
+            )
 
         @self.mcp.tool()
         def get_annotations(parent_path: str) -> dict:
@@ -1087,15 +1195,25 @@ class EnvoyMCPServer:
             Returns:
                 Dict with list of annotations and their properties including text, mode, position, and enclosed operators
             """
-            return self._execute_in_td('get_annotations', {
-                'parent_path': parent_path,
-            })
+            return self._execute_in_td(
+                "get_annotations",
+                {
+                    "parent_path": parent_path,
+                },
+            )
 
         @self.mcp.tool()
-        def set_annotation(op_path: str, text: str = None, title: str = None,
-                           color: list = None, opacity: float = None,
-                           width: int = None, height: int = None,
-                           x: int = None, y: int = None) -> dict:
+        def set_annotation(
+            op_path: str,
+            text: str = None,
+            title: str = None,
+            color: list = None,
+            opacity: float = None,
+            width: int = None,
+            height: int = None,
+            x: int = None,
+            y: int = None,
+        ) -> dict:
             """
             Modify properties of an existing annotation.
 
@@ -1113,17 +1231,20 @@ class EnvoyMCPServer:
             Returns:
                 Dict with updated annotation properties
             """
-            return self._execute_in_td('set_annotation', {
-                'op_path': op_path,
-                'text': text,
-                'title': title,
-                'color': color,
-                'opacity': opacity,
-                'width': width,
-                'height': height,
-                'x': x,
-                'y': y,
-            })
+            return self._execute_in_td(
+                "set_annotation",
+                {
+                    "op_path": op_path,
+                    "text": text,
+                    "title": title,
+                    "color": color,
+                    "opacity": opacity,
+                    "width": width,
+                    "height": height,
+                    "x": x,
+                    "y": y,
+                },
+            )
 
         @self.mcp.tool()
         def get_enclosed_ops(op_path: str) -> dict:
@@ -1138,9 +1259,12 @@ class EnvoyMCPServer:
             Returns:
                 Dict with enclosed_ops or enclosing_annotations depending on operator type
             """
-            return self._execute_in_td('get_enclosed_ops', {
-                'op_path': op_path,
-            })
+            return self._execute_in_td(
+                "get_enclosed_ops",
+                {
+                    "op_path": op_path,
+                },
+            )
 
         # === Operator Management Tools (Extended) ===
 
@@ -1156,14 +1280,10 @@ class EnvoyMCPServer:
             Returns:
                 Dict with success status and new path
             """
-            return self._execute_in_td('rename_op', {
-                'op_path': op_path,
-                'new_name': new_name
-            })
+            return self._execute_in_td("rename_op", {"op_path": op_path, "new_name": new_name})
 
         @self.mcp.tool()
-        def cook_op(op_path: str, force: bool = True,
-                         recurse: bool = False) -> dict:
+        def cook_op(op_path: str, force: bool = True, recurse: bool = False) -> dict:
             """
             Cook (evaluate) an operator.
 
@@ -1175,17 +1295,19 @@ class EnvoyMCPServer:
             Returns:
                 Dict with success status
             """
-            return self._execute_in_td('cook_op', {
-                'op_path': op_path,
-                'force': force,
-                'recurse': recurse
-            })
+            return self._execute_in_td("cook_op", {"op_path": op_path, "force": force, "recurse": recurse})
 
         @self.mcp.tool()
-        def find_children(op_path: str, name: str = None, type: str = None,
-                         depth: int = None, tags: list = None,
-                         text: str = None, comment: str = None,
-                         include_utility: bool = False) -> dict:
+        def find_children(
+            op_path: str,
+            name: str = None,
+            type: str = None,
+            depth: int = None,
+            tags: list = None,
+            text: str = None,
+            comment: str = None,
+            include_utility: bool = False,
+        ) -> dict:
             """
             Search for operators inside a COMP using TouchDesigner's findChildren.
             Much more powerful than query_network for targeted searches.
@@ -1203,16 +1325,19 @@ class EnvoyMCPServer:
             Returns:
                 Dict with list of matching operators
             """
-            return self._execute_in_td('find_children', {
-                'op_path': op_path,
-                'name': name,
-                'type': type,
-                'depth': depth,
-                'tags': tags,
-                'text': text,
-                'comment': comment,
-                'include_utility': include_utility,
-            })
+            return self._execute_in_td(
+                "find_children",
+                {
+                    "op_path": op_path,
+                    "name": name,
+                    "type": type,
+                    "depth": depth,
+                    "tags": tags,
+                    "text": text,
+                    "comment": comment,
+                    "include_utility": include_utility,
+                },
+            )
 
         @self.mcp.tool()
         def get_op_performance(op_path: str, include_children: bool = False) -> dict:
@@ -1226,10 +1351,10 @@ class EnvoyMCPServer:
             Returns:
                 Dict with CPU/GPU cook times, memory usage, cook counts
             """
-            return self._execute_in_td('get_op_performance', {
-                'op_path': op_path,
-                'include_children': include_children
-            })
+            return self._execute_in_td(
+                "get_op_performance",
+                {"op_path": op_path, "include_children": include_children},
+            )
 
         @self.mcp.tool()
         def get_project_performance(include_hotspots: int = 0) -> dict:
@@ -1250,9 +1375,7 @@ class EnvoyMCPServer:
                 totalOps), GPU info (gpuTemp), performance mode status, and optionally
                 hotspots (ranked COMPs with cook times and memory).
             """
-            return self._execute_in_td('get_project_performance', {
-                'include_hotspots': include_hotspots
-            })
+            return self._execute_in_td("get_project_performance", {"include_hotspots": include_hotspots})
 
         # === Embody Integration Tools ===
 
@@ -1269,10 +1392,7 @@ class EnvoyMCPServer:
             Returns:
                 Dict with success status and applied tag
             """
-            return self._execute_in_td('externalize_op', {
-                'op_path': op_path,
-                'tag_type': tag_type
-            })
+            return self._execute_in_td("externalize_op", {"op_path": op_path, "tag_type": tag_type})
 
         @self.mcp.tool()
         def remove_externalization_tag(op_path: str) -> dict:
@@ -1285,7 +1405,7 @@ class EnvoyMCPServer:
             Returns:
                 Dict with success status
             """
-            return self._execute_in_td('remove_externalization_tag', {'op_path': op_path})
+            return self._execute_in_td("remove_externalization_tag", {"op_path": op_path})
 
         @self.mcp.tool()
         def get_externalizations() -> dict:
@@ -1295,7 +1415,7 @@ class EnvoyMCPServer:
             Returns:
                 Dict with list of externalized operators and their status
             """
-            return self._execute_in_td('get_externalizations', {})
+            return self._execute_in_td("get_externalizations", {})
 
         @self.mcp.tool()
         def save_externalization(op_path: str) -> dict:
@@ -1308,7 +1428,7 @@ class EnvoyMCPServer:
             Returns:
                 Dict with success status and file path
             """
-            return self._execute_in_td('save_externalization', {'op_path': op_path})
+            return self._execute_in_td("save_externalization", {"op_path": op_path})
 
         @self.mcp.tool()
         def get_externalization_status(op_path: str) -> dict:
@@ -1321,16 +1441,21 @@ class EnvoyMCPServer:
             Returns:
                 Dict with dirty state, build number, timestamp, file path
             """
-            return self._execute_in_td('get_externalization_status', {'op_path': op_path})
+            return self._execute_in_td("get_externalization_status", {"op_path": op_path})
 
         # === Extension Creation ===
 
         @self.mcp.tool()
-        def create_extension(parent_path: str, class_name: str,
-                             name: str = None, code: str = None,
-                             promote: bool = True, ext_name: str = None,
-                             ext_index: int = None,
-                             existing_comp: bool = False) -> dict:
+        def create_extension(
+            parent_path: str,
+            class_name: str,
+            name: str = None,
+            code: str = None,
+            promote: bool = True,
+            ext_name: str = None,
+            ext_index: int = None,
+            existing_comp: bool = False,
+        ) -> dict:
             """
             Create or attach a TouchDesigner extension COMP and code DAT.
 
@@ -1347,25 +1472,30 @@ class EnvoyMCPServer:
             Returns:
                 Dict with comp_path, dat_path, class_name, ext_index, success status
             """
-            return self._execute_in_td('create_extension', {
-                'parent_path': parent_path,
-                'class_name': class_name,
-                'name': name,
-                'code': code,
-                'promote': promote,
-                'ext_name': ext_name,
-                'ext_index': ext_index,
-                'existing_comp': existing_comp,
-            })
+            return self._execute_in_td(
+                "create_extension",
+                {
+                    "parent_path": parent_path,
+                    "class_name": class_name,
+                    "name": name,
+                    "code": code,
+                    "promote": promote,
+                    "ext_name": ext_name,
+                    "ext_index": ext_index,
+                    "existing_comp": existing_comp,
+                },
+            )
 
         # === TDN Network Format Tools ===
 
         @self.mcp.tool()
-        def export_network(root_path: str = "/",
-                          include_dat_content: bool = None,
-                          output_file: str = None,
-                          max_depth: int = None,
-                          embed_all: bool = False) -> dict:
+        def export_network(
+            root_path: str = "/",
+            include_dat_content: bool = None,
+            output_file: str = None,
+            max_depth: int = None,
+            embed_all: bool = False,
+        ) -> dict:
             """
             Export a TouchDesigner network to .tdn JSON format.
             Only non-default properties are included, keeping output minimal.
@@ -1381,18 +1511,24 @@ class EnvoyMCPServer:
             Returns:
                 Dict with the .tdn JSON document and optional file path
             """
-            return self._execute_in_td('export_network', {
-                'root_path': root_path,
-                'include_dat_content': include_dat_content,
-                'output_file': output_file,
-                'max_depth': max_depth,
-                'embed_all': embed_all,
-            })
+            return self._execute_in_td(
+                "export_network",
+                {
+                    "root_path": root_path,
+                    "include_dat_content": include_dat_content,
+                    "output_file": output_file,
+                    "max_depth": max_depth,
+                    "embed_all": embed_all,
+                },
+            )
 
         @self.mcp.tool()
-        def import_network(target_path: str, tdn: dict,
-                          clear_first: bool = False,
-                          override: bool = False) -> dict:
+        def import_network(
+            target_path: str,
+            tdn: dict,
+            clear_first: bool = False,
+            override: bool = False,
+        ) -> dict:
             """
             Import a .tdn network into a TouchDesigner COMP, recreating all operators.
 
@@ -1407,18 +1543,23 @@ class EnvoyMCPServer:
             Returns:
                 Dict with import results and created operator paths
             """
-            return self._execute_in_td('import_network', {
-                'target_path': target_path,
-                'tdn': tdn,
-                'clear_first': clear_first,
-                'override': override,
-            })
+            return self._execute_in_td(
+                "import_network",
+                {
+                    "target_path": target_path,
+                    "tdn": tdn,
+                    "clear_first": clear_first,
+                    "override": override,
+                },
+            )
 
         @self.mcp.tool()
-        def read_tdn(comp_path: str = "/",
-                     include_dat_content: bool = None,
-                     max_depth: int = None,
-                     embed_all: bool = False) -> dict:
+        def read_tdn(
+            comp_path: str = "/",
+            include_dat_content: bool = None,
+            max_depth: int = None,
+            embed_all: bool = False,
+        ) -> dict:
             """
             Read live authored state under comp_path as a compact TDN dict.
 
@@ -1434,16 +1575,18 @@ class EnvoyMCPServer:
             Returns:
                 Dict with the TDN document under 'tdn', or {'error': ...}
             """
-            return self._execute_in_td('read_tdn', {
-                'comp_path': comp_path,
-                'include_dat_content': include_dat_content,
-                'max_depth': max_depth,
-                'embed_all': embed_all,
-            })
+            return self._execute_in_td(
+                "read_tdn",
+                {
+                    "comp_path": comp_path,
+                    "include_dat_content": include_dat_content,
+                    "max_depth": max_depth,
+                    "embed_all": embed_all,
+                },
+            )
+
         @self.mcp.tool()
-        def diff_tdn(target: str = "",
-                     max_changed_ops: int = 200,
-                     max_bytes: int = 60000) -> dict:
+        def diff_tdn(target: str = "", max_changed_ops: int = 200, max_bytes: int = 60000) -> dict:
             """Diff live in-memory TDN state against on-disk .tdn files.
 
             Empty target (or "/" / "project") returns a project summary; a
@@ -1457,19 +1600,26 @@ class EnvoyMCPServer:
             Returns:
                 Diff envelope, project summary, or {'error': ...}
             """
-            return self._execute_in_td('diff_tdn', {
-                'target': target,
-                'max_changed_ops': max_changed_ops,
-                'max_bytes': max_bytes,
-            })
-
+            return self._execute_in_td(
+                "diff_tdn",
+                {
+                    "target": target,
+                    "max_changed_ops": max_changed_ops,
+                    "max_bytes": max_bytes,
+                },
+            )
 
         # === TOP Capture ===
 
         @self.mcp.tool()
-        def capture_top(op_path: str, format: str = "jpeg", quality: float = 0.8,
-                        max_resolution: int = 640, inline: bool = False,
-                        sample_grid: int = 0) -> list:
+        def capture_top(
+            op_path: str,
+            format: str = "jpeg",
+            quality: float = 0.8,
+            max_resolution: int = 640,
+            inline: bool = False,
+            sample_grid: int = 0,
+        ) -> list:
             """
             Capture a TOP as a temp image file or sampled RGBA grid.
 
@@ -1497,46 +1647,50 @@ class EnvoyMCPServer:
             except Exception:
                 sample_grid_value = 0
 
-            result = self._execute_in_td('capture_top', {
-                'op_path': op_path,
-                'format': format,
-                'quality': quality,
-                'max_resolution': max_resolution,
-                'sample_grid': sample_grid_value,
-            })
+            result = self._execute_in_td(
+                "capture_top",
+                {
+                    "op_path": op_path,
+                    "format": format,
+                    "quality": quality,
+                    "max_resolution": max_resolution,
+                    "sample_grid": sample_grid_value,
+                },
+            )
 
-            if 'error' in result:
+            if "error" in result:
                 return result
 
             if sample_grid_value >= 2:
                 return result
 
             # Decode the base64 image data from the main thread
-            image_bytes = base64.b64decode(result['image_b64'])
+            image_bytes = base64.b64decode(result["image_b64"])
 
             # Always save to temp file (Claude Code can Read images natively)
-            ext = '.jpg' if result['format'] == 'jpeg' else f".{result['format']}"
-            file_path = os.path.join(tempfile.gettempdir(), f'envoy_capture_{uuid.uuid4().hex[:8]}{ext}')
-            with open(file_path, 'wb') as f:
+            ext = ".jpg" if result["format"] == "jpeg" else f".{result['format']}"
+            file_path = os.path.join(tempfile.gettempdir(), f"envoy_capture_{uuid.uuid4().hex[:8]}{ext}")
+            with open(file_path, "wb") as f:
                 f.write(image_bytes)
 
-            size_kb = result['size_bytes'] / 1024
-            info = (f"TOP capture: {result['original_width']}x{result['original_height']}"
-                    f" -> {result['width']}x{result['height']} {result['format'].upper()}"
-                    f" ({size_kb:.1f} KB)\nSaved to: {file_path}")
+            size_kb = result["size_bytes"] / 1024
+            info = (
+                f"TOP capture: {result['original_width']}x{result['original_height']}"
+                f" -> {result['width']}x{result['height']} {result['format'].upper()}"
+                f" ({size_kb:.1f} KB)\nSaved to: {file_path}"
+            )
 
             # Inline base64 images are token-heavy, so only embed when the caller
             # explicitly asks (inline=True) and the image is small. By default
             # return just the path; Read the file when actually judging a frame.
-            if inline and result['size_bytes'] < 20000:
-                return [info, self._Image(data=image_bytes, format=result['format'])]
+            if inline and result["size_bytes"] < 20000:
+                return [info, self._Image(data=image_bytes, format=result["format"])]
             return info + "\n(Use Read tool on the file path above to view the image)"
 
         # === Logging ===
 
         @self.mcp.tool()
-        def get_logs(level: str = None, count: int = 50, since_id: int = None,
-                     source: str = None) -> dict:
+        def get_logs(level: str = None, count: int = 50, since_id: int = None, source: str = None) -> dict:
             """
             Get recent log entries from Embody's ring buffer.
             Useful for debugging operations or understanding what happened.
@@ -1550,12 +1704,15 @@ class EnvoyMCPServer:
             Returns:
                 Dict with log entries and metadata
             """
-            return self._execute_in_td('get_logs', {
-                'level': level,
-                'count': count,
-                'since_id': since_id,
-                'source': source,
-            })
+            return self._execute_in_td(
+                "get_logs",
+                {
+                    "level": level,
+                    "count": count,
+                    "since_id": since_id,
+                    "source": source,
+                },
+            )
 
         @self.mcp.tool()
         def get_sessions() -> dict:
@@ -1587,7 +1744,7 @@ class EnvoyMCPServer:
             # TD access, so no main-thread round-trip (mcp-safety).
             snapshot = self._sessions_snapshot()
             sid, _label = _SESSION_CTX.get()
-            snapshot['you'] = sid
+            snapshot["you"] = sid
             return snapshot
 
         @self.mcp.tool()
@@ -1625,8 +1782,7 @@ class EnvoyMCPServer:
             return self._release_scope(sid, scope)
 
         @self.mcp.tool()
-        def run_tests(suite_name: str = None, test_name: str = None,
-                      override: bool = False) -> dict:
+        def run_tests(suite_name: str = None, test_name: str = None, override: bool = False) -> dict:
             """
             Run Embody test suites and return results.
 
@@ -1645,17 +1801,20 @@ class EnvoyMCPServer:
             test_event = Event()
             test_holder: dict = {}
             sys._envoy_pending_test = {
-                'event': test_event,
-                'holder': test_holder,
+                "event": test_event,
+                "holder": test_holder,
             }
 
             # Queue the start request (main thread will run deferred tests)
             self.add_to_refresh_queue({
-                'id': -1,  # Sentinel -- no normal response expected
-                'operation': 'run_tests',
-                'params': {'suite_name': suite_name, 'test_name': test_name,
-                           'override': override},
-                'sid': _SESSION_CTX.get()[0],
+                "id": -1,  # Sentinel -- no normal response expected
+                "operation": "run_tests",
+                "params": {
+                    "suite_name": suite_name,
+                    "test_name": test_name,
+                    "override": override,
+                },
+                "sid": _SESSION_CTX.get()[0],
             })
 
             # Block worker thread until tests finish, timeout, or shutdown.
@@ -1665,15 +1824,15 @@ class EnvoyMCPServer:
                 remaining = deadline - time.time()
                 if remaining <= 0:
                     sys._envoy_pending_test = None
-                    return {'error': 'Tests timed out after 300 seconds'}
+                    return {"error": "Tests timed out after 300 seconds"}
                 if test_event.wait(timeout=min(remaining, 1.0)):
                     break  # Tests finished
             else:
                 # Server shutting down -- unblock cleanly
                 sys._envoy_pending_test = None
-                return {'error': 'Server shutting down during test run'}
+                return {"error": "Server shutting down during test run"}
 
-            result = test_holder.get('result', {'error': 'No result'})
+            result = test_holder.get("result", {"error": "No result"})
             sys._envoy_pending_test = None
             return result
 
@@ -1695,10 +1854,13 @@ class EnvoyMCPServer:
             Returns:
                 Dict with 'results' (list in same order), 'count', and 'success' (false if any failed)
             """
-            return self._execute_in_td('batch_operations', {
-                'operations': operations,
-                'override': override,
-            })
+            return self._execute_in_td(
+                "batch_operations",
+                {
+                    "operations": operations,
+                    "override": override,
+                },
+            )
 
     # === get_docs: official TD documentation lookup ===
     # Design adapted from Derivative's TDMCP get_docs, with permission.
@@ -1709,22 +1871,26 @@ class EnvoyMCPServer:
         # the main thread). They must live on the facade: mod.* is a TD object
         # and is unavailable off the main thread (ext-diet WP4 gate finding).
         try:
-            query = (query or '').strip()
+            query = (query or "").strip()
             if not query:
-                return {'error': 'Provide query'}
-            section = (section or '').strip() or None
-            source = (source or 'auto').strip().lower()
-            if source not in ('auto', 'offline', 'web'):
-                return {'error': 'Invalid source. Use: auto, offline, web'}
+                return {"error": "Provide query"}
+            section = (section or "").strip() or None
+            source = (source or "auto").strip().lower()
+            if source not in ("auto", "offline", "web"):
+                return {"error": "Invalid source. Use: auto, offline, web"}
             try:
                 max_chars = int(max_chars)
             except Exception:
                 max_chars = 20000
             max_chars = max(1, max_chars)
 
-            cache_key = (query.lower(), section.lower() if section else None,
-                         source, int(max_chars))
-            cache = self._docs_state['cache']
+            cache_key = (
+                query.lower(),
+                section.lower() if section else None,
+                source,
+                int(max_chars),
+            )
+            cache = self._docs_state["cache"]
             if cache_key in cache:
                 return cache[cache_key]
 
@@ -1732,43 +1898,43 @@ class EnvoyMCPServer:
             offline_reason = None
             web_reason = None
 
-            if source in ('auto', 'offline'):
+            if source in ("auto", "offline"):
                 try:
                     doc = self._docsOffline(query)
                     if doc is None:
-                        offline_reason = 'offline mirror missing or no match'
+                        offline_reason = "offline mirror missing or no match"
                 except Exception as e:
-                    offline_reason = f'offline lookup failed: {e}'
+                    offline_reason = f"offline lookup failed: {e}"
                     doc = None
-                if isinstance(doc, dict) and doc.get('matches'):
-                    result = {'source': 'offline', 'matches': doc['matches']}
+                if isinstance(doc, dict) and doc.get("matches"):
+                    result = {"source": "offline", "matches": doc["matches"]}
                     cache[cache_key] = result
                     if len(cache) > 20:
                         cache.pop(next(iter(cache)))
                     return result
 
-            if doc is None and source in ('auto', 'web'):
+            if doc is None and source in ("auto", "web"):
                 try:
                     doc = self._docsWeb(query)
                     if doc is None:
-                        web_reason = 'web lookup found no match'
-                    elif isinstance(doc, dict) and doc.get('error'):
-                        web_reason = doc['error']
+                        web_reason = "web lookup found no match"
+                    elif isinstance(doc, dict) and doc.get("error"):
+                        web_reason = doc["error"]
                         doc = None
                 except Exception as e:
-                    web_reason = f'web lookup failed: {e}'
+                    web_reason = f"web lookup failed: {e}"
                     doc = None
 
             if doc is None:
                 tried = []
-                if source in ('auto', 'offline'):
-                    tried.append(offline_reason or 'offline mirror missing or no match')
-                if source in ('auto', 'web'):
-                    tried.append(web_reason or 'web lookup found no match')
-                return {'error': 'Documentation lookup failed: ' + '; '.join(tried)}
+                if source in ("auto", "offline"):
+                    tried.append(offline_reason or "offline mirror missing or no match")
+                if source in ("auto", "web"):
+                    tried.append(web_reason or "web lookup found no match")
+                return {"error": "Documentation lookup failed: " + "; ".join(tried)}
 
-            sections_available, sections = self._docsSplitSections(doc.get('text') or '')
-            content = doc.get('text') or ''
+            sections_available, sections = self._docsSplitSections(doc.get("text") or "")
+            content = doc.get("text") or ""
             if section:
                 wanted = section.lower()
                 title = None
@@ -1783,197 +1949,190 @@ class EnvoyMCPServer:
                             break
                 if title is None:
                     return {
-                        'error': f'Section not found: {section}',
-                        'sections_available': sections_available,
+                        "error": f"Section not found: {section}",
+                        "sections_available": sections_available,
                     }
-                content = sections.get(title.lower(), '')
+                content = sections.get(title.lower(), "")
 
             truncated = len(content) > max_chars
             if truncated:
                 content = content[:max_chars]
             result = {
-                'title': doc.get('title'),
-                'source': doc.get('source'),
-                'sections_available': sections_available,
-                'content': content,
+                "title": doc.get("title"),
+                "source": doc.get("source"),
+                "sections_available": sections_available,
+                "content": content,
             }
-            if doc.get('url'):
-                result['url'] = doc['url']
+            if doc.get("url"):
+                result["url"] = doc["url"]
             if truncated:
-                result['truncated'] = True
+                result["truncated"] = True
             cache[cache_key] = result
             if len(cache) > 20:
                 cache.pop(next(iter(cache)))
             return result
         except Exception as e:
-            return {'error': f'Documentation lookup failed: {e}'}
+            return {"error": f"Documentation lookup failed: {e}"}
 
     def _docsOfflineRoot(self):
-        if self._docs_state['resolved']:
-            return self._docs_state['root']
+        if self._docs_state["resolved"]:
+            return self._docs_state["root"]
         root_path = None
-        result = self._execute_in_td('get_docs_roots', {})
-        if not (isinstance(result, dict) and 'roots' in result
-                and not result.get('error')):
+        result = self._execute_in_td("get_docs_roots", {})
+        if not (isinstance(result, dict) and "roots" in result and not result.get("error")):
             return None
         try:
-            for candidate in result.get('roots', []):
+            for candidate in result.get("roots", []):
                 if os.path.isdir(candidate):
                     root_path = candidate
                     break
         except Exception:
             root_path = None
-        self._docs_state['resolved'] = True
-        self._docs_state['root'] = root_path
+        self._docs_state["resolved"] = True
+        self._docs_state["root"] = root_path
         return root_path
 
     def _docsOffline(self, query):
         root_path = self._docsOfflineRoot()
         if root_path is None:
             return None
-        if self._docs_state['index'] is None:
+        if self._docs_state["index"] is None:
             index = {}
             for filename in os.listdir(root_path):
-                if not filename.lower().endswith(('.htm', '.html')):
+                if not filename.lower().endswith((".htm", ".html")):
                     continue
                 stem = os.path.splitext(filename)[0]
                 key = self._docsNormalize(stem)
                 if key and key not in index:
                     index[key] = filename
-            self._docs_state['index'] = index
+            self._docs_state["index"] = index
 
-        index = self._docs_state['index']
+        index = self._docs_state["index"]
         key = self._docsNormalize(query)
         if not key:
             return None
 
         def read_doc(filename):
             path = os.path.join(root_path, filename)
-            with open(path, 'r', encoding='utf-8', errors='replace') as f:
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
                 html_src = f.read()
             stem = os.path.splitext(filename)[0]
             return {
-                'title': stem.replace('_', ' '),
-                'source': 'offline',
-                'text': self._docsHtmlToText(html_src),
+                "title": stem.replace("_", " "),
+                "source": "offline",
+                "text": self._docsHtmlToText(html_src),
             }
 
         if key in index:
             return read_doc(index[key])
 
-        candidates = [filename for index_key, filename in index.items()
-                      if key in index_key or index_key in key]
+        candidates = [filename for index_key, filename in index.items() if key in index_key or index_key in key]
         if len(candidates) == 1:
             return read_doc(candidates[0])
         if 2 <= len(candidates) <= 8:
             return {
-                'source': 'offline',
-                'matches': [
-                    os.path.splitext(filename)[0].replace('_', ' ')
-                    for filename in candidates
-                ],
+                "source": "offline",
+                "matches": [os.path.splitext(filename)[0].replace("_", " ") for filename in candidates],
             }
         return None
 
     def _docsWeb(self, query):
         try:
-            headers = {'User-Agent': 'Embody-Envoy-get_docs'}
+            headers = {"User-Agent": "Embody-Envoy-get_docs"}
             search_params = urllib.parse.urlencode({
-                'action': 'query',
-                'list': 'search',
-                'format': 'json',
-                'srlimit': 5,
-                'srsearch': query,
+                "action": "query",
+                "list": "search",
+                "format": "json",
+                "srlimit": 5,
+                "srsearch": query,
             })
-            search_url = 'https://docs.derivative.ca/api.php?' + search_params
+            search_url = "https://docs.derivative.ca/api.php?" + search_params
             request = urllib.request.Request(search_url, headers=headers)
             with urllib.request.urlopen(request, timeout=8) as response:
-                data = json.loads(response.read().decode('utf-8', errors='replace'))
-            results = data.get('query', {}).get('search', [])
+                data = json.loads(response.read().decode("utf-8", errors="replace"))
+            results = data.get("query", {}).get("search", [])
             if not results:
-                return {'error': 'web lookup found no match'}
-            title = results[0].get('title')
+                return {"error": "web lookup found no match"}
+            title = results[0].get("title")
             if not title:
-                return {'error': 'web lookup returned no title'}
+                return {"error": "web lookup returned no title"}
 
             parse_params = urllib.parse.urlencode({
-                'action': 'parse',
-                'format': 'json',
-                'prop': 'text',
-                'page': title,
+                "action": "parse",
+                "format": "json",
+                "prop": "text",
+                "page": title,
             })
-            parse_url = 'https://docs.derivative.ca/api.php?' + parse_params
+            parse_url = "https://docs.derivative.ca/api.php?" + parse_params
             request = urllib.request.Request(parse_url, headers=headers)
             with urllib.request.urlopen(request, timeout=8) as response:
-                data = json.loads(response.read().decode('utf-8', errors='replace'))
-            html_src = data.get('parse', {}).get('text', {}).get('*')
+                data = json.loads(response.read().decode("utf-8", errors="replace"))
+            html_src = data.get("parse", {}).get("text", {}).get("*")
             if html_src is None:
-                return {'error': 'web lookup returned no page content'}
+                return {"error": "web lookup returned no page content"}
             return {
-                'title': title,
-                'source': 'web',
-                'url': f'https://docs.derivative.ca/{title.replace(" ", "_")}',
-                'text': self._docsHtmlToText(html_src),
+                "title": title,
+                "source": "web",
+                "url": f"https://docs.derivative.ca/{title.replace(' ', '_')}",
+                "text": self._docsHtmlToText(html_src),
             }
         except Exception as e:
-            return {'error': f'web lookup failed: {e}'}
+            return {"error": f"web lookup failed: {e}"}
 
     @staticmethod
     def _docsNormalize(name: str) -> str:
-        return re.sub(r'[^a-z0-9]', '', (name or '').lower())
+        return re.sub(r"[^a-z0-9]", "", (name or "").lower())
 
     @staticmethod
     def _docsHtmlToText(html_src: str) -> str:
-        text = html_src or ''
-        text = re.sub(r'(?is)<(script|style)[^>]*>.*?</\1>', '', text)
-        text = re.sub(r'(?i)<h([1-4])[^>]*>',
-                      lambda m: '\n' + ('#' * int(m.group(1))) + ' ', text)
-        text = re.sub(r'(?i)</h[1-4]>', '\n', text)
-        text = re.sub(r'(?i)<li[^>]*>', '\n- ', text)
-        text = re.sub(r'(?i)</li>', '\n', text)
+        text = html_src or ""
+        text = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", "", text)
+        text = re.sub(r"(?i)<h([1-4])[^>]*>", lambda m: "\n" + ("#" * int(m.group(1))) + " ", text)
+        text = re.sub(r"(?i)</h[1-4]>", "\n", text)
+        text = re.sub(r"(?i)<li[^>]*>", "\n- ", text)
+        text = re.sub(r"(?i)</li>", "\n", text)
         text = re.sub(
-            r'(?i)</?(p|div|tr|br|table|tbody|thead|tfoot|td|th|ul|ol)[^>]*>',
-            '\n',
+            r"(?i)</?(p|div|tr|br|table|tbody|thead|tfoot|td|th|ul|ol)[^>]*>",
+            "\n",
             text,
         )
-        text = re.sub(r'(?s)<[^>]+>', '', text)
+        text = re.sub(r"(?s)<[^>]+>", "", text)
         text = unescape(text)
-        text = text.replace('\ufeff', '').replace('[edit]', '')
-        text = re.sub(r'[ \t\r\f\v]+', ' ', text)
-        text = re.sub(r' *\n *', '\n', text)
+        text = text.replace("\ufeff", "").replace("[edit]", "")
+        text = re.sub(r"[ \t\r\f\v]+", " ", text)
+        text = re.sub(r" *\n *", "\n", text)
         # MediaWiki boilerplate, removed AFTER whitespace normalization so the
         # line anchors see trimmed lines: the nav skeleton renders as bare '-'
         # / 'Jump to ...' lines, and nested headline spans strand '#' markers
         # on their own line -- regluing them keeps sections drill-down-able.
-        text = re.sub(r'(?m)^(?:-|Jump to navigation|Jump to search)$\n?', '', text)
-        text = re.sub(r'(?m)^(#{1,6})\n+(?=\S)', r'\1 ', text)
+        text = re.sub(r"(?m)^(?:-|Jump to navigation|Jump to search)$\n?", "", text)
+        text = re.sub(r"(?m)^(#{1,6})\n+(?=\S)", r"\1 ", text)
         # The mirror's page footer (Personal tools / Namespaces / Views / ...)
         # starts at a '## Personal tools' heading -- nothing after it is page
         # content, so cut there rather than blocklist each footer heading.
-        cut = re.search(r'(?m)^#{1,6} Personal tools$', text)
+        cut = re.search(r"(?m)^#{1,6} Personal tools$", text)
         if cut:
-            text = text[:cut.start()]
-        text = re.sub(r'\n{3,}', '\n\n', text)
+            text = text[: cut.start()]
+        text = re.sub(r"\n{3,}", "\n\n", text)
         return text.strip()
 
     @staticmethod
     def _docsSplitSections(text: str):
         sections_available = []
-        buffers = {'': []}
-        current = ''
-        for line in (text or '').splitlines():
-            match = re.match(r'^(#{1,6})\s+(.+?)\s*$', line)
+        buffers = {"": []}
+        current = ""
+        for line in (text or "").splitlines():
+            match = re.match(r"^(#{1,6})\s+(.+?)\s*$", line)
             if match:
                 current = match.group(2).strip()
                 # MediaWiki chrome headings still bucket their text away from
                 # real sections, but are not offered for section= drill-down.
-                if current.lower() not in ('contents', 'navigation menu'):
+                if current.lower() not in ("contents", "navigation menu"):
                     sections_available.append(current)
                 buffers.setdefault(current.lower(), []).append(line)
             else:
                 buffers.setdefault(current.lower(), []).append(line)
-        sections = {key: '\n'.join(lines).strip()
-                    for key, lines in buffers.items()}
+        sections = {key: "\n".join(lines).strip() for key, lines in buffers.items()}
         return sections_available, sections
 
     def run(self) -> None:
@@ -2003,27 +2162,21 @@ class EnvoyMCPServer:
                         return False
                 # Also suppress the "Error handling POST request" messages
                 # that contain ClientDisconnect in the message text
-                msg = record.getMessage() if hasattr(record, 'getMessage') else ''
-                if 'ClientDisconnect' in msg:
+                msg = record.getMessage() if hasattr(record, "getMessage") else ""
+                if "ClientDisconnect" in msg:
                     return False
                 return True
 
             @staticmethod
             def _is_disconnect(exc):
-                if isinstance(exc, (anyio.BrokenResourceError,
-                                    anyio.ClosedResourceError, _CD)):
+                if isinstance(exc, (anyio.BrokenResourceError, anyio.ClosedResourceError, _CD)):
                     return True
                 if isinstance(exc, BaseExceptionGroup):
-                    return all(_DisconnectCrashFilter._is_disconnect(e)
-                              for e in exc.exceptions)
+                    return all(_DisconnectCrashFilter._is_disconnect(e) for e in exc.exceptions)
                 return False
 
-        logging.getLogger("mcp.server.streamable_http_manager").addFilter(
-            _DisconnectCrashFilter()
-        )
-        logging.getLogger("mcp.server.streamable_http").addFilter(
-            _DisconnectCrashFilter()
-        )
+        logging.getLogger("mcp.server.streamable_http_manager").addFilter(_DisconnectCrashFilter())
+        logging.getLogger("mcp.server.streamable_http").addFilter(_DisconnectCrashFilter())
 
         # Drop the per-request "Processing request of type X" log lines from
         # FastMCP's lowlevel server.  The bridge's background reconciler
@@ -2044,14 +2197,12 @@ class EnvoyMCPServer:
                 # "Received exception from stream: " with empty or whitespace-
                 # only payload = bridge recycled a connection.  Not actionable.
                 if msg.startswith("Received exception from stream:"):
-                    payload = msg[len("Received exception from stream:"):].strip()
+                    payload = msg[len("Received exception from stream:") :].strip()
                     if not payload:
                         return False
                 return True
 
-        logging.getLogger("mcp.server.lowlevel.server").addFilter(
-            _RequestProcessingFilter()
-        )
+        logging.getLogger("mcp.server.lowlevel.server").addFilter(_RequestProcessingFilter())
 
         # Response checker is pure Python (no TD objects), so a plain thread is fine
         def response_checker():
@@ -2064,11 +2215,11 @@ class EnvoyMCPServer:
                     try:
                         expected = isinstance(e, Empty)
                     except NameError:
-                        expected = type(e).__name__ == 'Empty'
+                        expected = type(e).__name__ == "Empty"
                     if expected:
                         continue
                     if not self.shutdown_event.is_set():
-                        print(f'[Envoy][WARNING] response_checker exiting: {e}')
+                        print(f"[Envoy][WARNING] response_checker exiting: {e}")
                     break
 
         Thread(target=response_checker, daemon=True).start()
@@ -2085,9 +2236,14 @@ class EnvoyMCPServer:
         from starlette.requests import ClientDisconnect
 
         def _is_client_disconnect(exc):
-            if isinstance(exc, (anyio.BrokenResourceError,
-                                anyio.ClosedResourceError,
-                                ClientDisconnect)):
+            if isinstance(
+                exc,
+                (
+                    anyio.BrokenResourceError,
+                    anyio.ClosedResourceError,
+                    ClientDisconnect,
+                ),
+            ):
                 return True
             if isinstance(exc, BaseExceptionGroup):
                 return all(_is_client_disconnect(e) for e in exc.exceptions)
@@ -2096,6 +2252,7 @@ class EnvoyMCPServer:
         class _SuppressDisconnect:
             def __init__(self, app):
                 self.app = app
+
             async def __call__(self, scope, receive, send):
                 try:
                     await self.app(scope, receive, send)
@@ -2117,12 +2274,13 @@ class EnvoyMCPServer:
 
             async def __call__(self, scope, receive, send):
                 sid = label = None
-                if scope.get('type') == 'http':
+                if scope.get("type") == "http":
                     try:
-                        hdrs = {k.decode('latin-1').lower(): v.decode('latin-1')
-                                for k, v in (scope.get('headers') or [])}
-                        sid = hdrs.get('x-envoy-session') or None
-                        label = hdrs.get('x-envoy-label') or None
+                        hdrs = {
+                            k.decode("latin-1").lower(): v.decode("latin-1") for k, v in (scope.get("headers") or [])
+                        }
+                        sid = hdrs.get("x-envoy-session") or None
+                        label = hdrs.get("x-envoy-label") or None
                     except Exception:
                         sid = label = None
                     if sid:
@@ -2164,8 +2322,9 @@ class EnvoyMCPServer:
         # instant the task was enqueued (zombie status over a dead socket).
         def startup_monitor():
             import time as _t
+
             while not self.shutdown_event.is_set():
-                if getattr(uvi_server, 'started', False):
+                if getattr(uvi_server, "started", False):
                     if self.startup_event is not None:
                         self.startup_event.set()
                     return
@@ -2179,7 +2338,7 @@ class EnvoyMCPServer:
             # The IOCP proactor can permanently kill the listener socket on server restarts
             # with "WinError 64: The specified network name is no longer available" during
             # accept(). SelectorEventLoop handles TCP reliably without IOCP quirks.
-            if sys.platform.startswith('win'):
+            if sys.platform.startswith("win"):
                 asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
             asyncio.run(uvi_server.serve())
         finally:
@@ -2188,15 +2347,16 @@ class EnvoyMCPServer:
             # this exited server for a live one that needs draining --
             # only clear if it is still pointing at OUR instance (a newer
             # Start may have replaced it already).
-            if getattr(sys, '_envoy_uvi_server', None) is uvi_server:
+            if getattr(sys, "_envoy_uvi_server", None) is uvi_server:
                 sys._envoy_uvi_server = None
-            if sys.platform.startswith('win'):
+            if sys.platform.startswith("win"):
                 asyncio.set_event_loop_policy(None)
 
 
 # ============================================================
 # MAIN THREAD CODE (TouchDesigner Extension)
 # ============================================================
+
 
 class EnvoyExt:
     """
@@ -2211,21 +2371,21 @@ class EnvoyExt:
     - TouchDesigner operation execution
     """
 
-    def __init__(self, ownerComp: 'COMP') -> None:
+    def __init__(self, ownerComp: "COMP") -> None:
         self.ownerComp: COMP = ownerComp
         # Inherit queues from previous instance so pending requests survive
         # extension reinit during save cycles.  Queue is thread-safe.
-        _prev_queues = getattr(sys, '_envoy_queues', {}).get(ownerComp.path)
+        _prev_queues = getattr(sys, "_envoy_queues", {}).get(ownerComp.path)
         if _prev_queues is not None:
-            self.request_queue: Queue = _prev_queues['request']
-            self.response_queue: Queue = _prev_queues['response']
+            self.request_queue: Queue = _prev_queues["request"]
+            self.response_queue: Queue = _prev_queues["response"]
         else:
             self.request_queue: Queue = Queue()
             self.response_queue: Queue = Queue()
-        _q_registry = getattr(sys, '_envoy_queues', {})
+        _q_registry = getattr(sys, "_envoy_queues", {})
         _q_registry[ownerComp.path] = {
-            'request': self.request_queue,
-            'response': self.response_queue,
+            "request": self.request_queue,
+            "response": self.response_queue,
         }
         sys._envoy_queues = _q_registry
         self.current_task: Optional[Any] = None
@@ -2255,10 +2415,10 @@ class EnvoyExt:
         # permanently on a transient blip, then disable Envoy and force a manual
         # toggle (which also defeated the liveness watchdog).
         self._RESTART_WINDOW_SECONDS: float = 1800.0  # keep retrying for 30 min
-        self._RESTART_BACKOFF_BASE: float = 1.0       # first retry after ~1s
-        self._RESTART_BACKOFF_MAX: float = 60.0       # cap the gap at 1 min
-        self._RESTART_RESET_SECONDS: float = 120.0    # stable this long -> fresh storm
-        self._restart_window_start: float = 0.0       # time.time() of a storm's 1st failure
+        self._RESTART_BACKOFF_BASE: float = 1.0  # first retry after ~1s
+        self._RESTART_BACKOFF_MAX: float = 60.0  # cap the gap at 1 min
+        self._RESTART_RESET_SECONDS: float = 120.0  # stable this long -> fresh storm
+        self._restart_window_start: float = 0.0  # time.time() of a storm's 1st failure
         # H1 startup-readiness state: 'Running' is declared only after the
         # worker confirms a real bind (via _pollStartup).  _starting guards the
         # window so duplicate Start() calls are suppressed before envoy_running.
@@ -2285,53 +2445,53 @@ class EnvoyExt:
         # All state is plain instance attrs (reset on reinit, which is fine).
         # NEVER COMP storage (would pickle on save). Only ever read/written from
         # the main thread (via _onRefresh).
-        self._viz_target_op: Optional[str] = None    # path of the op to glide to NOW
+        self._viz_target_op: Optional[str] = None  # path of the op to glide to NOW
         # Pending hops Embot still has to step through. A batch runs every sub-op in
         # ONE frame, so without a queue only the LAST op of the batch would ever be
         # seen; instead each mutating sub-op enqueues a (path, caption) hop and the
         # pump below advances through them one at a time so he visibly steps node to
         # node. List of (op_path, action_text).
         self._viz_target_queue: list = []
-        self._viz_hop_until: float = 0.0    # hold the current hop until absTime >= this
+        self._viz_hop_until: float = 0.0  # hold the current hop until absTime >= this
         self._viz_last_view: Optional[tuple] = None  # (pane_id, owner, x, y, zoom) we last set
         self._viz_takeover_until: float = 0.0  # absTime.seconds; yield to the user until then
-        self._viz_settle_until: float = 0.0    # grace after a navigate while the view settles
-        self._viz_zoom_pending: bool = False   # apply _VIZ_ZOOM one frame after a navigate
+        self._viz_settle_until: float = 0.0  # grace after a navigate while the view settles
+        self._viz_zoom_pending: bool = False  # apply _VIZ_ZOOM one frame after a navigate
         self._viz_follow_net: Optional[str] = None  # net we're currently following in (zoom-on-engage)
         self._viz_selected_op: Optional[str] = None  # path of the op we last auto-highlighted
-        self._viz_last_activity: float = 0.0   # absTime.seconds of the last build op
-        self._viz_action_text: str = ''        # what Embot says he is doing (speech bubble)
-        self._viz_speech_src: str = ''         # last action typed into the bubble
-        self._viz_speech_t0: float = 0.0       # when the current line started typing
+        self._viz_last_activity: float = 0.0  # absTime.seconds of the last build op
+        self._viz_action_text: str = ""  # what Embot says he is doing (speech bubble)
+        self._viz_speech_src: str = ""  # last action typed into the bubble
+        self._viz_speech_t0: float = 0.0  # when the current line started typing
         self._viz_last_skin: Optional[tuple] = None  # last colour written (skip redundant writes)
-        self._viz_last_paint: float = 0.0            # last figure repaint (caps repaint fps)
-        self._viz_gesture_type: int = 0              # 0 wave / 1 reach / 2 pump / 3 dance
-        self._viz_gesture_start: float = 0.0         # when the current gesture began
-        self._viz_gesture_end: float = 0.0           # when it ends
-        self._viz_next_gesture: float = 0.0          # earliest time the next may start
-        self._viz_next_blink: float = 0.0            # absTime.seconds of the next eye blink
-        self._viz_blink_end: float = 0.0             # absTime.seconds the current blink ends
-        self._viz_eyes_closed: bool = False          # eyes currently coloured shut (blink)
-        self._viz_next_squint: float = 0.0           # absTime.seconds of the next happy squint
-        self._viz_squint_end: float = 0.0            # absTime.seconds the current squint ends
-        self._viz_squinting: bool = False            # eyes currently flattened (squint)
-        self._viz_pulse_op: Optional[str] = None      # path of the op currently pulsing
+        self._viz_last_paint: float = 0.0  # last figure repaint (caps repaint fps)
+        self._viz_gesture_type: int = 0  # 0 wave / 1 reach / 2 pump / 3 dance
+        self._viz_gesture_start: float = 0.0  # when the current gesture began
+        self._viz_gesture_end: float = 0.0  # when it ends
+        self._viz_next_gesture: float = 0.0  # earliest time the next may start
+        self._viz_next_blink: float = 0.0  # absTime.seconds of the next eye blink
+        self._viz_blink_end: float = 0.0  # absTime.seconds the current blink ends
+        self._viz_eyes_closed: bool = False  # eyes currently coloured shut (blink)
+        self._viz_next_squint: float = 0.0  # absTime.seconds of the next happy squint
+        self._viz_squint_end: float = 0.0  # absTime.seconds the current squint ends
+        self._viz_squinting: bool = False  # eyes currently flattened (squint)
+        self._viz_pulse_op: Optional[str] = None  # path of the op currently pulsing
         self._viz_pulse_orig: Optional[tuple] = None  # its original node colour
-        self._viz_pulse_start: float = 0.0     # absTime.seconds the pulse began
-        self._viz_bot_net: Optional[str] = None       # path of the net the bot figure lives in
-        self._viz_bot_pos: Optional[tuple] = None     # (x, y) current figure centre (animated)
-        self._viz_bot_from: Optional[tuple] = None    # (x, y) jump origin
+        self._viz_pulse_start: float = 0.0  # absTime.seconds the pulse began
+        self._viz_bot_net: Optional[str] = None  # path of the net the bot figure lives in
+        self._viz_bot_pos: Optional[tuple] = None  # (x, y) current figure centre (animated)
+        self._viz_bot_from: Optional[tuple] = None  # (x, y) jump origin
         self._viz_bot_target: Optional[tuple] = None  # (x, y) jump destination (stands on op)
-        self._viz_bot_jump_t0: float = 0.0            # absTime.seconds the current hop began
-        self._viz_jump_dur: float = 0.52              # duration of the current hop (longer for the entrance swoop)
+        self._viz_bot_jump_t0: float = 0.0  # absTime.seconds the current hop began
+        self._viz_jump_dur: float = 0.52  # duration of the current hop (longer for the entrance swoop)
         self._viz_bot_pending_entrance: bool = False  # assembled off-view, awaiting the swoop-in
-        self._viz_bot_dest: Optional[tuple] = None    # (x,y) op standing point to swoop to once whole
-        self._viz_bot_stage: Optional[tuple] = None   # (x,y) off-view point where parts are copied in
-        self._viz_bot_build_queue: list = []          # template part names still to copy this assembly
-        self._viz_assemble_next_frame: int = 0        # earliest absTime.frame the next spread part may copy
-        self._viz_bot_pending_cleanup: set = set()    # nets whose left-behind bot to tear down off-screen
-        self._crash_trace_enabled: bool = False       # diagnostic: flush a breadcrumb per viz annotation-graph op
-        self._crash_trace_f = None                    # open handle to the breadcrumb file
+        self._viz_bot_dest: Optional[tuple] = None  # (x,y) op standing point to swoop to once whole
+        self._viz_bot_stage: Optional[tuple] = None  # (x,y) off-view point where parts are copied in
+        self._viz_bot_build_queue: list = []  # template part names still to copy this assembly
+        self._viz_assemble_next_frame: int = 0  # earliest absTime.frame the next spread part may copy
+        self._viz_bot_pending_cleanup: set = set()  # nets whose left-behind bot to tear down off-screen
+        self._crash_trace_enabled: bool = False  # diagnostic: flush a breadcrumb per viz annotation-graph op
+        self._crash_trace_f = None  # open handle to the breadcrumb file
 
         # Get Thread Manager from TDResources
         self.ThreadManager = op.TDResources.ThreadManager
@@ -2344,19 +2504,19 @@ class EnvoyExt:
         #   - COMP attributes aren't supported on td.containerCOMP
         #   - Module-level vars reset on recompile
         #   - sys attributes persist across recompiles and are never pickled
-        _registry = getattr(sys, '_envoy_shutdown_events', {})
+        _registry = getattr(sys, "_envoy_shutdown_events", {})
         prev_event = _registry.get(self.ownerComp.path)
         if prev_event is not None and isinstance(prev_event, Event):
             prev_event.set()
 
         # Clean up stale Event from .store() if present (not picklable)
-        if self.ownerComp.fetch('envoy_shutdown_event', None) is not None:
-            self.ownerComp.unstore('envoy_shutdown_event')
+        if self.ownerComp.fetch("envoy_shutdown_event", None) is not None:
+            self.ownerComp.unstore("envoy_shutdown_event")
 
         self.shutdown_event = Event()
         _registry[self.ownerComp.path] = self.shutdown_event
         sys._envoy_shutdown_events = _registry
-        self.ownerComp.store('envoy_running', False)
+        self.ownerComp.store("envoy_running", False)
 
         # Defer auto-start so all init/recompile cycles finish first.
         # Guard: only auto-start if init() has already run. On fresh .tox
@@ -2364,12 +2524,10 @@ class EnvoyExt:
         # to False -- without this guard, Start() bypasses the opt-in prompt.
         # On code recompile (extension reinit during a running session),
         # _init_complete is already True so auto-start proceeds correctly.
-        if (self.ownerComp.par.Envoyenable.eval()
-                and self.ownerComp.fetch('_init_complete', False, search=False)):
+        if self.ownerComp.par.Envoyenable.eval() and self.ownerComp.fetch("_init_complete", False, search=False):
             # Clear stale status so Start() doesn't bail with "already active"
-            self.ownerComp.par.Envoystatus = 'Restarting after reinit...'
-            run(f"op('{self.ownerComp.path}').ext.Envoy.Start()",
-                delayFrames=30)
+            self.ownerComp.par.Envoystatus = "Restarting after reinit..."
+            run(f"op('{self.ownerComp.path}').ext.Envoy.Start()", delayFrames=30)
 
         # Arm the liveness watchdog for THIS instance, independent of Start().
         # Tied to the instance lifetime so a save/reinit whose post-reinit
@@ -2386,28 +2544,28 @@ class EnvoyExt:
         # negative and permanently no-op the watchdog restart (the wedge this
         # fixes). The cooldown now lives in self._last_revive_time (monotonic,
         # instance-only); this unstore just scrubs the obsolete key from old .toes.
-        self.ownerComp.unstore('_last_revive_frame')
+        self.ownerComp.unstore("_last_revive_frame")
         # Tag this armed chain with a monotonic generation (stored on the COMP
         # so it survives the reinit storm). Only the newest generation's tick
         # proceeds; the rest exit as stale -- one live loop per save, not ~N.
-        _wd_gen = self.ownerComp.fetch('_watchdog_gen', 0) + 1
-        self.ownerComp.store('_watchdog_gen', _wd_gen)
+        _wd_gen = self.ownerComp.fetch("_watchdog_gen", 0) + 1
+        self.ownerComp.store("_watchdog_gen", _wd_gen)
         # Pending run() calls can outlive COMP replacement during upgrades.
-        run("o = op(%r)\nif o and o.valid: o.ext.Envoy._watchdogTick(%d)" %
-            (self.ownerComp.path, _wd_gen),
-            delayMilliSeconds=4000)
+        run(
+            "o = op(%r)\nif o and o.valid: o.ext.Envoy._watchdogTick(%d)" % (self.ownerComp.path, _wd_gen),
+            delayMilliSeconds=4000,
+        )
 
         # If a deferred test run was in progress, unblock the old worker
         # thread so the old server can shut down cleanly (release the port).
         # The worker checks shutdown_event every 1s, but setting the Event
         # directly is faster and ensures it unblocks even if shutdown_event
         # was already set before the worker started polling.
-        pending_test = getattr(sys, '_envoy_pending_test', None)
+        pending_test = getattr(sys, "_envoy_pending_test", None)
         if pending_test is not None:
             self._restoreStatusAfterTests()
-            pending_test['holder']['result'] = {
-                'error': 'Extension reinitialized during test run'}
-            pending_test['event'].set()
+            pending_test["holder"]["result"] = {"error": "Extension reinitialized during test run"}
+            pending_test["event"].set()
             sys._envoy_pending_test = None
 
     # === Server Lifecycle ===
@@ -2439,31 +2597,32 @@ class EnvoyExt:
         # Log Thread Manager state before cleanup
         thread_info = []
         for t in self.ThreadManager.ext.ThreadManagerExt.Threads:
-            task = getattr(t, 'TDTask', None)
-            target = getattr(task, 'target', None) if task else None
-            name = getattr(target, '__name__', '?') if target else 'None'
-            thread_info.append(
-                f'{t.name}({name}, pool={t.InPool}, alive={t.is_alive()})')
+            task = getattr(t, "TDTask", None)
+            target = getattr(task, "target", None) if task else None
+            name = getattr(target, "__name__", "?") if target else "None"
+            thread_info.append(f"{t.name}({name}, pool={t.InPool}, alive={t.is_alive()})")
         if thread_info:
             self._log(
-                f'Thread Manager pre-cleanup: {len(thread_info)} threads: '
-                f'{"; ".join(thread_info)}', 'DEBUG')
+                f"Thread Manager pre-cleanup: {len(thread_info)} threads: {'; '.join(thread_info)}",
+                "DEBUG",
+            )
 
         cleaned = 0
         for thread in list(self.ThreadManager.ext.ThreadManagerExt.Threads):
-            task = getattr(thread, 'TDTask', None)
+            task = getattr(thread, "TDTask", None)
             if task is None:
                 continue
-            target = getattr(task, 'target', None)
-            if target is None or getattr(target, '__name__', '') != '_runServer':
+            target = getattr(task, "target", None)
+            if target is None or getattr(target, "__name__", "") != "_runServer":
                 continue
 
             # Skip pool workers -- shutdown_event handles their cleanup via
             # workLoop. Calling clean() would destroy the worker permanently.
             if thread.InPool:
                 self._log(
-                    'Skipping pool-worker _runServer '
-                    '(shutdown_event handles it)', 'DEBUG')
+                    "Skipping pool-worker _runServer (shutdown_event handles it)",
+                    "DEBUG",
+                )
                 continue
 
             # All standalone _runServer threads here are stale:
@@ -2478,13 +2637,14 @@ class EnvoyExt:
         if cleaned:
             # CRITICAL: sync the Runningthreads parameter so EnqueueTask
             # sees the actual thread count, not the stale pre-cleanup value.
-            self.ThreadManager.par.Runningthreads.val = len(
-                self.ThreadManager.ext.ThreadManagerExt.Threads)
+            self.ThreadManager.par.Runningthreads.val = len(self.ThreadManager.ext.ThreadManagerExt.Threads)
             self._log(
-                f'Cleaned {cleaned} stale Envoy thread(s) -- '
-                f'{len(self.ThreadManager.ext.ThreadManagerExt.Threads)}'
-                f' threads remain '
-                f'(capacity: {self.ThreadManager.ext.ThreadManagerExt.MaxNumberOfThreads.eval()})', 'DEBUG')
+                f"Cleaned {cleaned} stale Envoy thread(s) -- "
+                f"{len(self.ThreadManager.ext.ThreadManagerExt.Threads)}"
+                f" threads remain "
+                f"(capacity: {self.ThreadManager.ext.ThreadManagerExt.MaxNumberOfThreads.eval()})",
+                "DEBUG",
+            )
 
     def _forceCloseOldServer(self) -> bool:
         """Force-close a stuck old uvicorn server so the port is freed.
@@ -2505,24 +2665,23 @@ class EnvoyExt:
         """
         # Signal all known shutdown events (housekeeping -- does not by
         # itself indicate WE are holding a socket).
-        registry = getattr(sys, '_envoy_shutdown_events', {})
+        registry = getattr(sys, "_envoy_shutdown_events", {})
         for path, evt in registry.items():
             if not evt.is_set():
-                self._log(f'Force-signaling shutdown event for {path}', 'DEBUG')
+                self._log(f"Force-signaling shutdown event for {path}", "DEBUG")
                 evt.set()
 
         # Unblock any stuck test wait
-        pending_test = getattr(sys, '_envoy_pending_test', None)
+        pending_test = getattr(sys, "_envoy_pending_test", None)
         if pending_test is not None:
-            pending_test['holder']['result'] = {
-                'error': 'Server force-restarted during test run'}
-            pending_test['event'].set()
+            pending_test["holder"]["result"] = {"error": "Server force-restarted during test run"}
+            pending_test["event"].set()
             sys._envoy_pending_test = None
 
         # Force-close the old uvicorn server's sockets
-        old_server = getattr(sys, '_envoy_uvi_server', None)
+        old_server = getattr(sys, "_envoy_uvi_server", None)
         if old_server is not None:
-            self._log('Force-closing old uvicorn server sockets', 'DEBUG')
+            self._log("Force-closing old uvicorn server sockets", "DEBUG")
             old_server.should_exit = True
             # force_exit skips graceful drain -- without this, uvicorn waits
             # for established connections (e.g. MCP client keep-alives) to
@@ -2531,8 +2690,8 @@ class EnvoyExt:
             # Close all listener sockets to immediately free the port.
             # uvicorn.Server.servers holds asyncio.Server objects; each has
             # a .sockets tuple of the underlying socket.socket objects.
-            for srv in getattr(old_server, 'servers', []):
-                for sock in getattr(srv, 'sockets', ()) or ():
+            for srv in getattr(old_server, "servers", []):
+                for sock in getattr(srv, "sockets", ()) or ():
                     try:
                         sock.close()
                     except Exception:
@@ -2542,10 +2701,10 @@ class EnvoyExt:
                 except Exception:
                     pass
             sys._envoy_uvi_server = None
-            return True   # We actually closed a live socket of ours.
+            return True  # We actually closed a live socket of ours.
         return False  # Nothing of ours was holding any port.
 
-    def _findAvailablePort(self, base_port: int, range_size: int = 10) -> 'int | None':
+    def _findAvailablePort(self, base_port: int, range_size: int = 10) -> "int | None":
         """Find an available port in [base_port, base_port + range_size).
 
         Checks BOTH the socket state AND the envoy.json registry so that
@@ -2567,7 +2726,7 @@ class EnvoyExt:
         def _port_in_use(port: int) -> bool:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.settimeout(1)
-                return s.connect_ex(('127.0.0.1', port)) == 0
+                return s.connect_ex(("127.0.0.1", port)) == 0
 
         def _port_registered_by_other(port: int) -> bool:
             """Check if another live instance claims this port in envoy.json."""
@@ -2575,11 +2734,11 @@ class EnvoyExt:
                 config_path = self._registryPath()
                 if config_path is None or not config_path.exists():
                     return False
-                config = json.loads(config_path.read_text(encoding='utf-8'))
+                config = json.loads(config_path.read_text(encoding="utf-8"))
                 my_pid = _os.getpid()
-                for name, info in config.get('instances', {}).items():
-                    if info.get('port') == port:
-                        other_pid = info.get('td_pid', 0)
+                for name, info in config.get("instances", {}).items():
+                    if info.get("port") == port:
+                        other_pid = info.get("td_pid", 0)
                         if other_pid and other_pid != my_pid:
                             # Use the shared safe liveness check -- a raw
                             # os.kill(other_pid, 0) here would silently
@@ -2606,7 +2765,7 @@ class EnvoyExt:
         # change the outcome. (Symptom: ~108 dropped frames per toggle
         # at 60fps whenever a zombie PID claims the preferred port.)
         if _port_registered_by_other(base_port):
-            self._log(f'Port {base_port} held by another instance, scanning range...')
+            self._log(f"Port {base_port} held by another instance, scanning range...")
             for offset in range(1, range_size):
                 candidate = base_port + offset
                 if not _port_taken(candidate):
@@ -2619,7 +2778,7 @@ class EnvoyExt:
         # process (e.g. zombie TD that isn't in envoy.json); waiting on
         # that would block the main thread for no benefit -- skip to the
         # range scan.
-        self._log(f'Port {base_port} in use, attempting to free it...')
+        self._log(f"Port {base_port} in use, attempting to free it...")
         acted = self._forceCloseOldServer()
 
         if acted:
@@ -2628,15 +2787,16 @@ class EnvoyExt:
             # sock.close() should free the port near-instantly; longer
             # waits noticeably stutter the UI.
             import time as _time
+
             for _ in range(5):
                 _time.sleep(0.1)
                 if not _port_taken(base_port):
-                    self._log(f'Port {base_port} freed after force-close')
+                    self._log(f"Port {base_port} freed after force-close")
                     return base_port
 
         # Either nothing of ours was holding the port (foreign zombie), or
         # the wait expired. Scan the range for any free port.
-        self._log(f'Port {base_port} held by another process, scanning range...')
+        self._log(f"Port {base_port} held by another process, scanning range...")
         for offset in range(1, range_size):
             candidate = base_port + offset
             if not _port_taken(candidate):
@@ -2646,9 +2806,8 @@ class EnvoyExt:
 
     def Start(self) -> None:
         """Start MCP server via op.TDResources.ThreadManager"""
-        if self.ownerComp.fetch('envoy_running', False) or self._starting:
-            self._log('Server already running/starting (duplicate Start ignored)',
-                      'DEBUG')
+        if self.ownerComp.fetch("envoy_running", False) or self._starting:
+            self._log("Server already running/starting (duplicate Start ignored)", "DEBUG")
             return
         # The envoy_running store can be lost on extension reinit (file sync
         # replaces baked-in code -> extension reinitializes -> storage cleared).
@@ -2656,7 +2815,7 @@ class EnvoyExt:
         # Only 'Running' means the server thread is actually active.
         # 'Starting...' is just a UI hint -- not proof of an active thread.
         status = str(self.ownerComp.par.Envoystatus.eval())
-        if status.startswith('Running'):
+        if status.startswith("Running"):
             # Trust a 'Running' status ONLY if the socket actually answers. A
             # stale 'Running on port N' left behind when a worker died (the save
             # wedge -- status never updated) must NOT short-circuit the restart,
@@ -2664,45 +2823,47 @@ class EnvoyExt:
             # down forever. _runtime_port is reset on reinit, so recover the port
             # from the status string (or the configured par) before probing.
             import re as _re, socket as _socket
-            _m = _re.search(r'port (\d+)', status)
-            _probe_port = (getattr(self, '_runtime_port', None)
-                           or (int(_m.group(1)) if _m else None)
-                           or int(self.ownerComp.par.Envoyport.eval()))
+
+            _m = _re.search(r"port (\d+)", status)
+            _probe_port = (
+                getattr(self, "_runtime_port", None)
+                or (int(_m.group(1)) if _m else None)
+                or int(self.ownerComp.par.Envoyport.eval())
+            )
             _alive = False
             try:
                 _s = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
                 _s.settimeout(0.25)
                 try:
-                    _s.connect(('127.0.0.1', int(_probe_port)))
+                    _s.connect(("127.0.0.1", int(_probe_port)))
                     _alive = True
                 finally:
                     _s.close()
             except Exception:
                 _alive = False
             if _alive:
-                self._log(f'Server already active (status: {status})', 'WARNING')
-                self.ownerComp.store('envoy_running', True)
+                self._log(f"Server already active (status: {status})", "WARNING")
+                self.ownerComp.store("envoy_running", True)
                 return
-            self._log(f'Stale {status!r} but socket is dead -- restarting fresh',
-                      'WARNING')
+            self._log(f"Stale {status!r} but socket is dead -- restarting fresh", "WARNING")
             # fall through to start a new worker
 
         # A background dependency install from a prior Start() is still running;
         # _pollBootstrap will finish the start when it completes. Don't stack a
         # second bootstrap on top of it.
         if self._bootstrapping:
-            self._log('Dependency install already in progress (Start ignored)', 'DEBUG')
+            self._log("Dependency install already in progress (Start ignored)", "DEBUG")
             return
         if self._import_gate_running:
-            self._log('Import gate warm-up already in progress (Start ignored)', 'DEBUG')
+            self._log("Import gate warm-up already in progress (Start ignored)", "DEBUG")
             return
 
         # Resolve git root silently -- Start() never prompts. Dialogs belong only
         # in _enableEnvoy() / InitGit() which are explicitly user-initiated.
-        git_root = self.ownerComp.fetch('_git_root', None, search=False)
+        git_root = self.ownerComp.fetch("_git_root", None, search=False)
         if not git_root:
             git_root = self._findGitRoot()
-            self.ownerComp.store('_git_root', git_root)
+            self.ownerComp.store("_git_root", git_root)
 
         # Ensure the Python environment is ready before starting the server.
         # The fast path (deps already installed and current) is cheap and runs
@@ -2723,20 +2884,19 @@ class EnvoyExt:
         # thread. Cold-importing MCP pulls in pydantic/starlette/uvicorn and can
         # freeze TD for several seconds on first open after install/upgrade.
         if not Embody._wirePythonPaths(spec):
-            self.ownerComp.par.Envoystatus = 'Error: Python environment not ready'
+            self.ownerComp.par.Envoystatus = "Error: Python environment not ready"
             self._log(
-                Embody._importGateFailureMessage(
-                    spec['site_packages'], 'venv site-packages path is missing'),
-                'ERROR',
+                Embody._importGateFailureMessage(spec["site_packages"], "venv site-packages path is missing"),
+                "ERROR",
             )
             self._log(
-                'Aborting Envoy start -- Python environment is not ready. '
-                'See textport above for the underlying failure.',
-                'ERROR',
+                "Aborting Envoy start -- Python environment is not ready. "
+                "See textport above for the underlying failure.",
+                "ERROR",
             )
             return
 
-        if getattr(sys, '_envoy_import_gate_ok', False):
+        if getattr(sys, "_envoy_import_gate_ok", False):
             self._continueStart(git_root)
             return
 
@@ -2746,11 +2906,11 @@ class EnvoyExt:
         """Warm the MCP import stack on a worker thread for the ready-venv path."""
         self._import_gate_running = True
         self._import_gate_result = None
-        self.ownerComp.par.Envoystatus = 'Preparing Python environment...'
+        self.ownerComp.par.Envoystatus = "Preparing Python environment..."
         self._log(
-            'Warming the MCP Python stack on a background thread -- first open '
-            'after install/upgrade can take a few seconds; TD stays responsive.',
-            'INFO',
+            "Warming the MCP Python stack on a background thread -- first open "
+            "after install/upgrade can take a few seconds; TD stays responsive.",
+            "INFO",
         )
         import_gate_check = op.Embody.ext.Embody._importGateCheck
 
@@ -2763,8 +2923,13 @@ class EnvoyExt:
             self._import_gate_result = result
 
         Thread(target=worker, daemon=True).start()
-        run('args[0]._pollImportGate(args[1], args[2])',
-            self, git_root, spec, delayFrames=15)
+        run(
+            "args[0]._pollImportGate(args[1], args[2])",
+            self,
+            git_root,
+            spec,
+            delayFrames=15,
+        )
 
     def _pollImportGate(self, git_root, spec) -> None:
         """Main-thread poll for the fast-path background MCP import gate."""
@@ -2778,8 +2943,13 @@ class EnvoyExt:
 
         result = self._import_gate_result
         if result is None:
-            run('args[0]._pollImportGate(args[1], args[2])',
-                self, git_root, spec, delayFrames=15)
+            run(
+                "args[0]._pollImportGate(args[1], args[2])",
+                self,
+                git_root,
+                spec,
+                delayFrames=15,
+            )
             return
 
         self._import_gate_running = False
@@ -2787,23 +2957,24 @@ class EnvoyExt:
 
         # The user may have toggled Envoy off while the import gate warmed.
         if not self.ownerComp.par.Envoyenable.eval():
-            self._log('Envoy disabled during Python environment prep -- not starting.', 'DEBUG')
-            if not str(self.ownerComp.par.Envoystatus.eval()).startswith(
-                    ('Error', 'Disabled', 'Off')):
-                self.ownerComp.par.Envoystatus = 'Disabled'
+            self._log(
+                "Envoy disabled during Python environment prep -- not starting.",
+                "DEBUG",
+            )
+            if not str(self.ownerComp.par.Envoystatus.eval()).startswith(("Error", "Disabled", "Off")):
+                self.ownerComp.par.Envoystatus = "Disabled"
             return
 
         if not ok:
-            self.ownerComp.par.Envoystatus = 'Error: Python environment not ready'
+            self.ownerComp.par.Envoystatus = "Error: Python environment not ready"
             self._log(
-                op.Embody.ext.Embody._importGateFailureMessage(
-                    spec['site_packages'], message),
-                'ERROR',
+                op.Embody.ext.Embody._importGateFailureMessage(spec["site_packages"], message),
+                "ERROR",
             )
             self._log(
-                'Aborting Envoy start -- Python environment is not ready. '
-                'See textport above for the underlying failure.',
-                'ERROR',
+                "Aborting Envoy start -- Python environment is not ready. "
+                "See textport above for the underlying failure.",
+                "ERROR",
             )
             return
 
@@ -2824,12 +2995,14 @@ class EnvoyExt:
         self._bootstrapping = True
         self._bootstrap_result = None
         import os as _os
-        self._venv_existed = _os.path.isdir(spec['venv_dir'])  # only record a venv Embody creates
-        self.ownerComp.par.Envoystatus = 'Installing deps... (one-time)'
+
+        self._venv_existed = _os.path.isdir(spec["venv_dir"])  # only record a venv Embody creates
+        self.ownerComp.par.Envoystatus = "Installing deps... (one-time)"
         self._log(
-            'Installing Envoy Python dependencies in the background (one-time '
-            'setup). TouchDesigner stays responsive; MCP will connect when this '
-            'finishes.')
+            "Installing Envoy Python dependencies in the background (one-time "
+            "setup). TouchDesigner stays responsive; MCP will connect when this "
+            "finishes."
+        )
         Embody = op.Embody.ext.Embody
         wire_python_paths = Embody._wirePythonPaths
         import_gate_check = Embody._importGateCheck
@@ -2837,27 +3010,31 @@ class EnvoyExt:
         def worker():
             msgs = []
             gate_ok = False
-            gate_msg = ''
+            gate_msg = ""
             try:
-                ok = Embody._installDependencies(
-                    spec, log=lambda m, lvl='INFO': msgs.append((lvl, m)))
+                ok = Embody._installDependencies(spec, log=lambda m, lvl="INFO": msgs.append((lvl, m)))
             except BaseException as e:
                 ok = False
-                msgs.append(('ERROR', f'Dependency install crashed: {e}'))
+                msgs.append(("ERROR", f"Dependency install crashed: {e}"))
             if ok:
                 try:
                     if wire_python_paths(spec):
                         gate_ok, gate_msg = import_gate_check()
                     else:
-                        gate_msg = 'venv site-packages path is missing'
+                        gate_msg = "venv site-packages path is missing"
                 except BaseException as e:
                     gate_msg = str(e) or e.__class__.__name__
             # Atomic publish: the main-thread poll reads this single attribute.
             self._bootstrap_result = (ok, msgs, gate_ok, gate_msg)
 
         Thread(target=worker, daemon=True).start()
-        run('args[0]._pollBootstrap(args[1], args[2])',
-            self, git_root, spec, delayFrames=30)
+        run(
+            "args[0]._pollBootstrap(args[1], args[2])",
+            self,
+            git_root,
+            spec,
+            delayFrames=30,
+        )
 
     def _pollBootstrap(self, git_root, spec) -> None:
         """Main-thread poll for the background dependency install (see
@@ -2874,8 +3051,13 @@ class EnvoyExt:
         result = self._bootstrap_result
         if result is None:
             # Worker still installing -- check again shortly.
-            run('args[0]._pollBootstrap(args[1], args[2])',
-                self, git_root, spec, delayFrames=30)
+            run(
+                "args[0]._pollBootstrap(args[1], args[2])",
+                self,
+                git_root,
+                spec,
+                delayFrames=30,
+            )
             return
 
         self._bootstrapping = False
@@ -2886,35 +3068,33 @@ class EnvoyExt:
         # The user may have toggled Envoy off while deps installed -- honor it
         # rather than starting a server they just disabled.
         if not self.ownerComp.par.Envoyenable.eval():
-            self._log('Envoy disabled during dependency install -- not starting.', 'DEBUG')
-            if not str(self.ownerComp.par.Envoystatus.eval()).startswith(
-                    ('Error', 'Disabled', 'Off')):
-                self.ownerComp.par.Envoystatus = 'Disabled'
+            self._log("Envoy disabled during dependency install -- not starting.", "DEBUG")
+            if not str(self.ownerComp.par.Envoystatus.eval()).startswith(("Error", "Disabled", "Off")):
+                self.ownerComp.par.Envoystatus = "Disabled"
             return
 
         if not ok:
-            self.ownerComp.par.Envoystatus = 'Error: Python environment not ready'
+            self.ownerComp.par.Envoystatus = "Error: Python environment not ready"
             self._log(
-                'Envoy start aborted -- dependency install failed. '
-                'See messages above.', 'ERROR')
+                "Envoy start aborted -- dependency install failed. See messages above.",
+                "ERROR",
+            )
             return
 
         # The worker created the venv (if it didn't already exist) -- record it
         # for Uninstall. Best-effort; must never block the start.
         try:
-            if not getattr(self, '_venv_existed', True):
+            if not getattr(self, "_venv_existed", True):
                 Embody = op.Embody.ext.Embody
-                Embody._manifestRecordVenv(
-                    str(Embody._findProjectRoot()), Embody._venvPaths()['venv_dir'])
+                Embody._manifestRecordVenv(str(Embody._findProjectRoot()), Embody._venvPaths()["venv_dir"])
         except Exception:
             pass
 
         if not gate_ok:
-            self.ownerComp.par.Envoystatus = 'Error: Python environment not ready'
+            self.ownerComp.par.Envoystatus = "Error: Python environment not ready"
             self._log(
-                op.Embody.ext.Embody._importGateFailureMessage(
-                    spec['site_packages'], gate_msg),
-                'ERROR',
+                op.Embody.ext.Embody._importGateFailureMessage(spec["site_packages"], gate_msg),
+                "ERROR",
             )
             return
         sys._envoy_import_gate_ok = True
@@ -2933,12 +3113,14 @@ class EnvoyExt:
         port = self._findAvailablePort(base_port)
         if port is None:
             self._log(
-                f'All ports {base_port}-{base_port + 9} in use. '
-                f'Close a TouchDesigner instance or change the Port parameter.', 'ERROR')
-            self.ownerComp.par.Envoystatus = f'Error: ports {base_port}\u2013{base_port + 9} in use'
+                f"All ports {base_port}-{base_port + 9} in use. "
+                f"Close a TouchDesigner instance or change the Port parameter.",
+                "ERROR",
+            )
+            self.ownerComp.par.Envoystatus = f"Error: ports {base_port}\u2013{base_port + 9} in use"
             return
         if port != base_port:
-            self._log(f'Port {base_port} in use by another instance, using {port}')
+            self._log(f"Port {base_port} in use by another instance, using {port}")
             # Note: do NOT set self.ownerComp.par.Envoyport = port here.
             # Envoyport is the user's *preferred* port; parexec.py watches it
             # and triggers Stop+Start on change, causing a restart loop.
@@ -2954,7 +3136,7 @@ class EnvoyExt:
         # Create a FRESH Event for this server instance.  Don't clear() the old
         # one -- it must stay set so the previous thread's shutdown_monitor sees it.
         self.shutdown_event = Event()
-        _registry = getattr(sys, '_envoy_shutdown_events', {})
+        _registry = getattr(sys, "_envoy_shutdown_events", {})
         _registry[self.ownerComp.path] = self.shutdown_event
         sys._envoy_shutdown_events = _registry
 
@@ -2969,10 +3151,10 @@ class EnvoyExt:
         self._last_start_time = time.time()
         self._starting = True  # H1: starting window open (suppresses duplicate Start)
 
-        self._log(f'Starting Envoy MCP server on port {port}')
+        self._log(f"Starting Envoy MCP server on port {port}")
 
         # Update status
-        self.ownerComp.par.Envoystatus = 'Starting...'
+        self.ownerComp.par.Envoystatus = "Starting..."
 
         # Wrap hooks with generation guard so stale callbacks from a previous
         # server thread don't corrupt the running server's state.
@@ -2982,24 +3164,27 @@ class EnvoyExt:
         def guarded_success(returnValue=None, _gen=gen):
             try:
                 if self.ownerComp.ext.Envoy is not self:
-                    self._log('Stale server thread from previous init (ignored)', 'DEBUG')
+                    self._log("Stale server thread from previous init (ignored)", "DEBUG")
                     return
             except Exception:
                 return
             if self._server_gen != _gen:
-                self._log('Stale server thread exited (ignored)', 'DEBUG')
+                self._log("Stale server thread exited (ignored)", "DEBUG")
                 return
             self._onServerSuccess(returnValue)
 
         def guarded_error(error, _gen=gen):
             try:
                 if self.ownerComp.ext.Envoy is not self:
-                    self._log(f'Stale server error from previous init (ignored): {error}', 'DEBUG')
+                    self._log(
+                        f"Stale server error from previous init (ignored): {error}",
+                        "DEBUG",
+                    )
                     return
             except Exception:
                 return
             if self._server_gen != _gen:
-                self._log(f'Stale server error (ignored): {error}', 'DEBUG')
+                self._log(f"Stale server error (ignored): {error}", "DEBUG")
                 return
             self._onServerError(error)
 
@@ -3010,34 +3195,36 @@ class EnvoyExt:
         # drains via its own shutdown_event, not these queues.
         self.request_queue = Queue()
         self.response_queue = Queue()
-        _q_registry = getattr(sys, '_envoy_queues', {})
+        _q_registry = getattr(sys, "_envoy_queues", {})
         _q_registry[self.ownerComp.path] = {
-            'request': self.request_queue,
-            'response': self.response_queue,
+            "request": self.request_queue,
+            "response": self.response_queue,
         }
         sys._envoy_queues = _q_registry
 
         # Create and enqueue a TDTask
         self.current_task = self.ThreadManager.TDTask(
             target=self._runServer,
-            args=(port, self.request_queue, self.response_queue,
-                  self.shutdown_event, startup_event),
+            args=(
+                port,
+                self.request_queue,
+                self.response_queue,
+                self.shutdown_event,
+                startup_event,
+            ),
             SuccessHook=guarded_success,
             ExceptHook=guarded_error,
-            RefreshHook=self._onRefresh
+            RefreshHook=self._onRefresh,
         )
-        thread = self.ThreadManager.EnqueueTask(
-            self.current_task, standalone=True)
+        thread = self.ThreadManager.EnqueueTask(self.current_task, standalone=True)
 
         if thread is None:
             # H1: no standalone worker means the socket can never bind. Treat as
             # a startup failure so escalation engages, instead of a zombie that
             # reports "Running" forever.
-            self._log(
-                'Thread Manager could not start a standalone server worker.',
-                'ERROR')
+            self._log("Thread Manager could not start a standalone server worker.", "ERROR")
             self._starting = False
-            self._onServerError('Thread Manager could not start server worker')
+            self._onServerError("Thread Manager could not start server worker")
             return
 
         # H1: status stays 'Starting...' (set above) until the worker confirms
@@ -3045,8 +3232,11 @@ class EnvoyExt:
         # escalates on timeout/failure. Config files below are written
         # regardless -- the bridge retries until the server is reachable.
         self._startup_deadline = time.time() + 10.0
-        run(f"op({self.ownerComp.path!r}).ext.Envoy._pollStartup({gen})",
-            fromOP=self.ownerComp, delayFrames=6)
+        run(
+            f"op({self.ownerComp.path!r}).ext.Envoy._pollStartup({gen})",
+            fromOP=self.ownerComp,
+            delayFrames=6,
+        )
 
         # Auto-configure project files.
         # Each step is independent -- one failure must not block the others.
@@ -3065,18 +3255,19 @@ class EnvoyExt:
                 target_dir = Embody._findProjectRoot()
             except Exception:
                 # Defensive fallback for older deployments
-                target_dir = git_root if git_root != 'no-git' else None
+                target_dir = git_root if git_root != "no-git" else None
             self._configureMCPClient(port, target_dir=target_dir)
             try:
                 Embody._upgradeEnvoy()
             except Exception as e:
-                self._log(f'Could not auto-configure AI client files: {e}', 'WARNING')
+                self._log(f"Could not auto-configure AI client files: {e}", "WARNING")
 
             # Git config: only when a git repo exists. Always lives at the git
             # root regardless of Aiprojectroot -- .gitignore/.gitattributes are
             # git's files, not Embody's.
-            if git_root != 'no-git':
+            if git_root != "no-git":
                 from pathlib import Path
+
                 git_path = Path(git_root)
                 self._configureGitignore(git_path)
                 self._configureGitattributes(git_path)
@@ -3102,12 +3293,13 @@ class EnvoyExt:
         if ev is not None and ev.is_set():
             # Confirmed bound + serving.
             self._starting = False
-            self.ownerComp.store('envoy_running', True)
-            self.ownerComp.par.Envoystatus = f'Running on port {self._runtime_port}'
+            self.ownerComp.store("envoy_running", True)
+            self.ownerComp.par.Envoystatus = f"Running on port {self._runtime_port}"
             self._last_start_time = time.time()
             self._log(
-                f'Envoy MCP server confirmed listening on port '
-                f'{self._runtime_port}', 'DEBUG')
+                f"Envoy MCP server confirmed listening on port {self._runtime_port}",
+                "DEBUG",
+            )
             # The liveness watchdog is already running for this generation (armed
             # at _continueStart); a confirmed bind just flips it from the _starting
             # defer-state into active socket monitoring on its next tick. It
@@ -3119,13 +3311,14 @@ class EnvoyExt:
             # Never bound within the readiness window -> route to the error path
             # so the restart/escalation logic engages (not a silent zombie).
             self._starting = False
-            self._onServerError(
-                f'Envoy did not bind port {self._runtime_port} within the '
-                f'startup timeout')
+            self._onServerError(f"Envoy did not bind port {self._runtime_port} within the startup timeout")
             return
         # Not yet bound, not timed out -- keep polling.
-        run(f"op({self.ownerComp.path!r}).ext.Envoy._pollStartup({gen})",
-            fromOP=self.ownerComp, delayFrames=6)
+        run(
+            f"op({self.ownerComp.path!r}).ext.Envoy._pollStartup({gen})",
+            fromOP=self.ownerComp,
+            delayFrames=6,
+        )
 
     # === Liveness watchdog (pure Python run()-loop -- no operator, no timer) ===
 
@@ -3156,7 +3349,7 @@ class EnvoyExt:
         # or logging. gen == 0 is a legacy tick armed before this guard existed
         # -- let it proceed so the loop is never orphaned across the upgrade.
         try:
-            if gen and gen != self.ownerComp.fetch('_watchdog_gen', 0):
+            if gen and gen != self.ownerComp.fetch("_watchdog_gen", 0):
                 return
         except Exception:
             pass
@@ -3178,9 +3371,9 @@ class EnvoyExt:
             # Only two idle cases: disabled, or a one-time deps install (legit
             # long, never interrupt). An explicit Start 'Error' is also left alone
             # so a hard failure (e.g. broken venv) is not hammered every tick.
-            installing = status.startswith('Installing')
-            transitional = status.startswith(('Starting', 'Restarting', 'Reviving'))
-            if not enabled or installing or status.startswith('Error'):
+            installing = status.startswith("Installing")
+            transitional = status.startswith(("Starting", "Restarting", "Reviving"))
+            if not enabled or installing or status.startswith("Error"):
                 self._deadTicks = 0
                 self._startingTicks = 0
             elif transitional:
@@ -3190,43 +3383,46 @@ class EnvoyExt:
                 # the socket answers. Status-par driven, so it fires even after a
                 # save reset _starting / _init_complete.
                 self._deadTicks = 0
-                self._startingTicks = getattr(self, '_startingTicks', 0) + 1
-                if self._startingTicks >= 6:     # 6 * 4s = ~24s stuck -> restart
+                self._startingTicks = getattr(self, "_startingTicks", 0) + 1
+                if self._startingTicks >= 6:  # 6 * 4s = ~24s stuck -> restart
                     self._startingTicks = 0
                     self._log(
-                        f'Watchdog: status stuck at {status!r} ~24s while '
-                        f'enabled -- forcing restart', 'WARNING')
-                    self._reviveDeadServer(
-                        self.ownerComp.fetch('envoy_running', False))
+                        f"Watchdog: status stuck at {status!r} ~24s while enabled -- forcing restart",
+                        "WARNING",
+                    )
+                    self._reviveDeadServer(self.ownerComp.fetch("envoy_running", False))
             else:
                 # Settled + enabled, INCLUDING a stale 'Running on port N' left
                 # after a save killed the worker without updating the status (the
                 # exact 6.36/6.37 wedge): probe the real socket. Dead for ~8s ->
                 # revive. _init_complete is intentionally NOT consulted here.
                 self._startingTicks = 0
-                running = self.ownerComp.fetch('envoy_running', False)
+                running = self.ownerComp.fetch("envoy_running", False)
                 if running and self._probeAlive():
                     self._deadTicks = 0
                 else:
                     self._deadTicks += 1
-                    if self._deadTicks >= 2:     # ~8s enabled-but-down -> revive
+                    if self._deadTicks >= 2:  # ~8s enabled-but-down -> revive
                         self._deadTicks = 0
                         self._log(
-                            f'Watchdog: enabled but socket dead (status '
-                            f'{status!r}) -- reviving', 'WARNING')
+                            f"Watchdog: enabled but socket dead (status {status!r}) -- reviving",
+                            "WARNING",
+                        )
                         self._reviveDeadServer(running)
         except Exception as e:
             try:
-                self._log(f'Watchdog tick error (continuing): {e}', 'DEBUG')
+                self._log(f"Watchdog tick error (continuing): {e}", "DEBUG")
             except Exception:
                 pass
 
         # Always reschedule -- the loop is instance-tied; only the identity guard
         # above ends it. A transient tick error never kills self-healing.
         # Pending run() calls can outlive COMP replacement during upgrades.
-        run("o = op(%r)\nif o and o.valid: o.ext.Envoy._watchdogTick(%d)" %
-            (self.ownerComp.path, gen),
-            fromOP=self.ownerComp, delayMilliSeconds=4000)
+        run(
+            "o = op(%r)\nif o and o.valid: o.ext.Envoy._watchdogTick(%d)" % (self.ownerComp.path, gen),
+            fromOP=self.ownerComp,
+            delayMilliSeconds=4000,
+        )
 
     def _probeAlive(self) -> bool:
         """Fast localhost connect to the runtime port. True iff a listener answers.
@@ -3236,13 +3432,14 @@ class EnvoyExt:
         tick. Unknown port -> True, so we never restart on missing info.
         """
         import socket
-        port = getattr(self, '_runtime_port', None)
+
+        port = getattr(self, "_runtime_port", None)
         if not port:
             return True
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(0.25)
         try:
-            sock.connect(('127.0.0.1', int(port)))
+            sock.connect(("127.0.0.1", int(port)))
             return True
         except Exception:
             return False
@@ -3281,10 +3478,11 @@ class EnvoyExt:
         if time.monotonic() - self._last_revive_time < 2.0:
             return  # already revived for this death event -- drop the duplicate
         self._last_revive_time = time.monotonic()
-        port = getattr(self, '_runtime_port', None)
+        port = getattr(self, "_runtime_port", None)
         self._log(
-            f'Watchdog: MCP socket on port {port} unreachable while enabled '
-            f'(running={was_running}) -- reviving server', 'WARNING')
+            f"Watchdog: MCP socket on port {port} unreachable while enabled (running={was_running}) -- reviving server",
+            "WARNING",
+        )
         # Bump the generation first so the old worker's exit callbacks (and any
         # pending poll/watchdog) are treated as stale -- a single clean restart,
         # not ours plus a _scheduleRestart racing each other.
@@ -3293,11 +3491,14 @@ class EnvoyExt:
             self.shutdown_event.set()  # nudge a stuck worker to exit + free the socket
         except Exception:
             pass
-        self.ownerComp.store('envoy_running', False)
+        self.ownerComp.store("envoy_running", False)
         self._starting = False
-        self.ownerComp.par.Envoystatus = 'Reviving (watchdog)...'
-        run(f"op({self.ownerComp.path!r}).ext.Envoy.Start()",
-            fromOP=self.ownerComp, delayFrames=18)
+        self.ownerComp.par.Envoystatus = "Reviving (watchdog)..."
+        run(
+            f"op({self.ownerComp.path!r}).ext.Envoy.Start()",
+            fromOP=self.ownerComp,
+            delayFrames=18,
+        )
 
     def Stop(self) -> None:
         """Stop MCP server"""
@@ -3310,37 +3511,43 @@ class EnvoyExt:
         # making Envoyenable appear to "do nothing."
         self._restart_count = 0
         self._restart_window_start = 0.0  # fresh retry window on the next storm
-        if not self.ownerComp.fetch('envoy_running', False):
-            self._log('Envoy disabled')
+        if not self.ownerComp.fetch("envoy_running", False):
+            self._log("Envoy disabled")
             # Only set 'Disabled' if hooks haven't already set a more
             # specific status (e.g. 'Stopped' or 'Error: ...')
             current = str(self.ownerComp.par.Envoystatus.eval())
-            if not current.startswith(('Stopped', 'Error')):
-                self.ownerComp.par.Envoystatus = 'Disabled'
+            if not current.startswith(("Stopped", "Error")):
+                self.ownerComp.par.Envoystatus = "Disabled"
             return
 
-        self._log('Stopping Envoy MCP server')
-        self.ownerComp.store('envoy_running', False)
+        self._log("Stopping Envoy MCP server")
+        self.ownerComp.store("envoy_running", False)
         self.shutdown_event.set()  # Signal uvicorn to exit
 
         # Remove this instance from the registry
         try:
             self._removeFromRegistry()
         except Exception as e:
-            self._log(f'Registry cleanup failed: {e}', 'WARNING')
+            self._log(f"Registry cleanup failed: {e}", "WARNING")
 
         # Update status
-        self.ownerComp.par.Envoystatus = 'Disabled'
+        self.ownerComp.par.Envoystatus = "Disabled"
 
     # === Thread Manager Target (runs in worker thread) ===
 
     @staticmethod
-    def _runServer(port: int, request_queue: Queue, response_queue: Queue,
-                   shutdown_event: Event, startup_event: Optional[Event] = None):
+    def _runServer(
+        port: int,
+        request_queue: Queue,
+        response_queue: Queue,
+        shutdown_event: Event,
+        startup_event: Optional[Event] = None,
+    ):
         """
         Target function for TDTask - runs MCP server in worker thread.
         IMPORTANT: No TouchDesigner calls allowed here! This is static.
         """
+
         def add_to_refresh(data):
             """Add data to the request queue (polled by RefreshHook on main thread)"""
             request_queue.put(data)
@@ -3356,67 +3563,62 @@ class EnvoyExt:
             )
             server.run()
         except OSError as e:
-            if e.errno == 48 or 'address already in use' in str(e).lower():
+            if e.errno == 48 or "address already in use" in str(e).lower():
                 raise RuntimeError(
-                    f'Port {port} is already in use. '
-                    f'Another Envoy instance or process may be bound to it.'
+                    f"Port {port} is already in use. Another Envoy instance or process may be bound to it."
                 ) from e
-            raise RuntimeError(f'MCP server failed on port {port}: {e}') from e
+            raise RuntimeError(f"MCP server failed on port {port}: {e}") from e
         except Exception as e:
             # uvicorn raises UnboundLocalError when bind fails -- surface
             # the underlying cause if possible.
-            if 'address already in use' in str(e).lower():
+            if "address already in use" in str(e).lower():
                 raise RuntimeError(
-                    f'Port {port} is already in use. '
-                    f'Another Envoy instance or process may be bound to it.'
+                    f"Port {port} is already in use. Another Envoy instance or process may be bound to it."
                 ) from e
-            raise RuntimeError(f'MCP server failed on port {port}: {e}') from e
+            raise RuntimeError(f"MCP server failed on port {port}: {e}") from e
         except BaseException as e:
             # uvicorn calls sys.exit(1) on bind failure -> SystemExit, which is
             # a BaseException and escapes the handlers above. Without this it
             # never reaches the ExceptHook (no error -> no restart/escalation ->
             # zombie "Running"). Normalize so _onServerError fires.
-            raise RuntimeError(
-                f'MCP server exited abnormally on port {port}: {e!r}') from e
+            raise RuntimeError(f"MCP server exited abnormally on port {port}: {e!r}") from e
 
     # === Thread Manager Callbacks (run on main thread) ===
 
-    _GATED_OPERATIONS = ('delete_op', 'import_network', 'run_tests',
-                         'batch_operations')
+    _GATED_OPERATIONS = ("delete_op", "import_network", "run_tests", "batch_operations")
 
     def _destructiveTargets(self, operation, params):
         """(scopes, reason) the destructive gate protects for this
         operation, or ([], '') when nothing is gated."""
         params = params or {}
-        if operation == 'delete_op':
-            target = params.get('op_path')
-            if isinstance(target, str) and target.startswith('/'):
-                return [target], 'delete_op'
-            return [], ''
-        if operation == 'import_network':
-            if not params.get('clear_first'):
-                return [], ''
-            target = params.get('target_path')
-            if isinstance(target, str) and target.startswith('/'):
-                return [target], 'import_network(clear_first=True)'
-            return [], ''
-        if operation == 'run_tests':
-            return ['project:tests'], 'run_tests'
-        if operation == 'batch_operations':
+        if operation == "delete_op":
+            target = params.get("op_path")
+            if isinstance(target, str) and target.startswith("/"):
+                return [target], "delete_op"
+            return [], ""
+        if operation == "import_network":
+            if not params.get("clear_first"):
+                return [], ""
+            target = params.get("target_path")
+            if isinstance(target, str) and target.startswith("/"):
+                return [target], "import_network(clear_first=True)"
+            return [], ""
+        if operation == "run_tests":
+            return ["project:tests"], "run_tests"
+        if operation == "batch_operations":
             gated = []
-            for sub in (params.get('operations') or [])[:32]:
+            for sub in (params.get("operations") or [])[:32]:
                 if not isinstance(sub, dict):
                     continue
-                sub_params = sub.get('params') or {}
-                if sub_params.get('override'):
+                sub_params = sub.get("params") or {}
+                if sub_params.get("override"):
                     continue
-                sub_scopes, _reason = self._destructiveTargets(
-                    sub.get('tool', ''), sub_params)
+                sub_scopes, _reason = self._destructiveTargets(sub.get("tool", ""), sub_params)
                 gated.extend(sub_scopes)
             if gated:
-                return gated, 'batch_operations (destructive sub-operations)'
-            return [], ''
-        return [], ''
+                return gated, "batch_operations (destructive sub-operations)"
+            return [], ""
+        return [], ""
 
     def _checkDestructiveGate(self, sid, operation, params):
         """Refuse a destructive operation when a LIVE peer session claimed
@@ -3425,77 +3627,114 @@ class EnvoyExt:
         proceed. Advisory-first design: everything else only warns."""
         if operation not in self._GATED_OPERATIONS:
             return None
-        if (params or {}).get('override'):
+        if (params or {}).get("override"):
             return None
         targets, reason = self._destructiveTargets(operation, params)
         if not targets:
             return None
         lock, touches, sessions = self._touchStores()
-        claims = getattr(sys, '_envoy_claims', None)
+        claims = getattr(sys, "_envoy_claims", None)
         if lock is None:
             return None
-        me = sid or '_anon'
+        me = sid or "_anon"
         now = time.time()
         with lock:
-            live = {s for s, v in (sessions or {}).items()
-                    if now - v.get('last_seen', 0) < 600}
+            live = {s for s, v in (sessions or {}).items() if now - v.get("last_seen", 0) < 600}
             for held_scope, claim in (claims or {}).items():
-                if claim['sid'] == me or claim['sid'] not in live:
+                if claim["sid"] == me or claim["sid"] not in live:
                     continue
-                if now > claim['ts'] + claim['ttl']:
+                if now > claim["ts"] + claim["ttl"]:
                     continue
-                if not any(_scope_overlaps(target, held_scope)
-                           for target in targets):
+                if not any(_scope_overlaps(target, held_scope) for target in targets):
                     continue
-                holder = (sessions or {}).get(claim['sid']) or {}
-                label = holder.get('label') or claim.get('label') or claim['sid']
-                note = claim.get('note', '') or 'no note'
+                holder = (sessions or {}).get(claim["sid"]) or {}
+                label = holder.get("label") or claim.get("label") or claim["sid"]
+                note = claim.get("note", "") or "no note"
                 self._log(
-                    'MULTI-SESSION GATE: refused ' + reason + ' -- "' + label
-                    + '" holds ' + held_scope + ' (' + note + ')', 'WARNING')
-                return {'error': 'MULTI-SESSION GATE: ' + reason
-                                 + ' refused -- session "' + label
-                                 + '" holds a claim on ' + held_scope
-                                 + ' (' + note + ', expires in '
-                                 + str(round(claim['ts'] + claim['ttl'] - now))
-                                 + 's). Coordinate, work in another subtree,'
-                                 + ' wait for expiry, or pass override=True'
-                                 + ' if you are certain.',
-                        'holder': {'label': label, 'scope': held_scope,
-                                   'note': claim.get('note', '')}}
+                    "MULTI-SESSION GATE: refused "
+                    + reason
+                    + ' -- "'
+                    + label
+                    + '" holds '
+                    + held_scope
+                    + " ("
+                    + note
+                    + ")",
+                    "WARNING",
+                )
+                return {
+                    "error": "MULTI-SESSION GATE: "
+                    + reason
+                    + ' refused -- session "'
+                    + label
+                    + '" holds a claim on '
+                    + held_scope
+                    + " ("
+                    + note
+                    + ", expires in "
+                    + str(round(claim["ts"] + claim["ttl"] - now))
+                    + "s). Coordinate, work in another subtree,"
+                    + " wait for expiry, or pass override=True"
+                    + " if you are certain.",
+                    "holder": {
+                        "label": label,
+                        "scope": held_scope,
+                        "note": claim.get("note", ""),
+                    },
+                }
             for scope, ring in (touches or {}).items():
-                if not any(_scope_overlaps(target, scope)
-                           for target in targets):
+                if not any(_scope_overlaps(target, scope) for target in targets):
                     continue
                 for touch in reversed(ring):
-                    if touch['sid'] == me:
+                    if touch["sid"] == me:
                         continue
-                    age = now - touch['ts']
+                    age = now - touch["ts"]
                     if age > _CONFLICT_WINDOW_S:
                         break  # ring is chronological; older ones only
-                    peer = (sessions or {}).get(touch['sid']) or {}
-                    label = peer.get('label') or touch['sid']
+                    peer = (sessions or {}).get(touch["sid"]) or {}
+                    label = peer.get("label") or touch["sid"]
                     self._log(
-                        'MULTI-SESSION GATE: refused ' + reason + ' -- "'
-                        + label + '" wrote ' + scope + ' '
-                        + str(round(age, 1)) + 's ago', 'WARNING')
-                    return {'error': 'MULTI-SESSION GATE: ' + reason
-                                     + ' refused -- session "' + label
-                                     + '" wrote ' + scope + ' only '
-                                     + str(round(age, 1)) + 's ago. Check'
-                                     + ' get_sessions, coordinate, or pass'
-                                     + ' override=True if you are certain.',
-                            'peer': {'label': label, 'scope': scope,
-                                     'tool': touch['tool'],
-                                     'age_s': round(age, 1)}}
+                        "MULTI-SESSION GATE: refused "
+                        + reason
+                        + ' -- "'
+                        + label
+                        + '" wrote '
+                        + scope
+                        + " "
+                        + str(round(age, 1))
+                        + "s ago",
+                        "WARNING",
+                    )
+                    return {
+                        "error": "MULTI-SESSION GATE: "
+                        + reason
+                        + ' refused -- session "'
+                        + label
+                        + '" wrote '
+                        + scope
+                        + " only "
+                        + str(round(age, 1))
+                        + "s ago. Check"
+                        + " get_sessions, coordinate, or pass"
+                        + " override=True if you are certain.",
+                        "peer": {
+                            "label": label,
+                            "scope": scope,
+                            "tool": touch["tool"],
+                            "age_s": round(age, 1),
+                        },
+                    }
         return None
+
     @staticmethod
     def _touchStores():
         """Shared multi-session stores (created by the worker; None-safe
         before the first server start)."""
-        return (getattr(sys, '_envoy_sessions_lock', None),
-                getattr(sys, '_envoy_touches', None),
-                getattr(sys, '_envoy_sessions', None))
+        return (
+            getattr(sys, "_envoy_sessions_lock", None),
+            getattr(sys, "_envoy_touches", None),
+            getattr(sys, "_envoy_sessions", None),
+        )
 
     def _expandFileScopes(self, scopes):
         """Append file: scopes for op-path scopes covered by the
@@ -3508,24 +3747,25 @@ class EnvoyExt:
                 return out
             rows = []
             for r in range(1, table.numRows):
-                tracked_path = table[r, 'path'].val
-                rel_file = table[r, 'rel_file_path'].val
+                tracked_path = table[r, "path"].val
+                rel_file = table[r, "rel_file_path"].val
                 if tracked_path and rel_file:
                     rows.append((tracked_path, rel_file))
             for scope in scopes:
-                if not scope.startswith('/'):
+                if not scope.startswith("/"):
                     continue
-                matches = [(tracked_path, rel_file)
-                           for tracked_path, rel_file in rows
-                           if scope == tracked_path
-                           or scope.startswith(tracked_path + '/')]
+                matches = [
+                    (tracked_path, rel_file)
+                    for tracked_path, rel_file in rows
+                    if scope == tracked_path or scope.startswith(tracked_path + "/")
+                ]
                 # Most specific first; keep at most 2 (the op's own file +
                 # its nearest tracked ancestor, e.g. the enclosing .tdn).
                 # Broader ancestors (a project-root .tdn) would make every
                 # write in the project overlap every other one.
                 matches.sort(key=lambda m: len(m[0]), reverse=True)
                 for _tracked, rel_file in matches[:2]:
-                    file_scope = 'file:' + rel_file.replace('\\', '/')
+                    file_scope = "file:" + rel_file.replace("\\", "/")
                     if file_scope not in out:
                         out.append(file_scope)
         except Exception:
@@ -3539,23 +3779,21 @@ class EnvoyExt:
         lock, touches, _sessions = self._touchStores()
         if lock is None or touches is None:
             return
-        entry = {'sid': sid or '_anon', 'tool': operation, 'ts': time.time()}
+        entry = {"sid": sid or "_anon", "tool": operation, "ts": time.time()}
         with lock:
             # Lease renewal: the holder's own writes refresh their claims.
-            claims = getattr(sys, '_envoy_claims', None)
+            claims = getattr(sys, "_envoy_claims", None)
             if claims:
                 for held_scope, claim in claims.items():
-                    if claim['sid'] == entry['sid'] and any(
-                            _scope_overlaps(s, held_scope) for s in scopes):
-                        claim['ts'] = entry['ts']
+                    if claim["sid"] == entry["sid"] and any(_scope_overlaps(s, held_scope) for s in scopes):
+                        claim["ts"] = entry["ts"]
             for scope in scopes:
                 ring = touches.setdefault(scope, [])
                 ring.append(entry)
                 del ring[:-_TOUCH_RING_CAP]
             if len(touches) > _TOUCH_SCOPE_CAP:
-                oldest_first = sorted(touches.items(),
-                                      key=lambda kv: kv[1][-1]['ts'])
-                for stale_scope, _ring in oldest_first[:len(touches) - _TOUCH_SCOPE_CAP]:
+                oldest_first = sorted(touches.items(), key=lambda kv: kv[1][-1]["ts"])
+                for stale_scope, _ring in oldest_first[: len(touches) - _TOUCH_SCOPE_CAP]:
                     del touches[stale_scope]
 
     def _attachPeerAdvisories(self, result, sid, operation, scopes):
@@ -3569,7 +3807,7 @@ class EnvoyExt:
         lock, touches, sessions = self._touchStores()
         if lock is None or touches is None:
             return
-        me = sid or '_anon'
+        me = sid or "_anon"
         now = time.time()
         is_write = operation in _WRITE_OPERATIONS
         candidates = []
@@ -3579,73 +3817,75 @@ class EnvoyExt:
                 if not any(_scope_overlaps(s, scope) for s in scopes):
                     continue
                 for touch in reversed(ring):
-                    peer_sid = touch['sid']
+                    peer_sid = touch["sid"]
                     if peer_sid == me:
                         continue
-                    age = now - touch['ts']
+                    age = now - touch["ts"]
                     if age > _TOUCH_WINDOW_S:
                         continue
                     conflict = is_write and age < _CONFLICT_WINDOW_S
                     dedup_key = (peer_sid, scope)
-                    if (not conflict and
-                            now - served.get(dedup_key, 0) < _ADVISORY_DEDUP_S):
+                    if not conflict and now - served.get(dedup_key, 0) < _ADVISORY_DEDUP_S:
                         continue
                     peer = (sessions or {}).get(peer_sid) or {}
                     candidates.append({
-                        '_sid': peer_sid,
-                        '_key': dedup_key,
-                        'label': peer.get('label', peer_sid),
-                        'scope': scope,
-                        'tool': touch['tool'],
-                        'age_s': round(age, 1),
-                        'conflict': conflict,
+                        "_sid": peer_sid,
+                        "_key": dedup_key,
+                        "label": peer.get("label", peer_sid),
+                        "scope": scope,
+                        "tool": touch["tool"],
+                        "age_s": round(age, 1),
+                        "conflict": conflict,
                     })
                     break  # newest relevant touch per scope suffices
             # One entry per peer: conflicts first, then op-path scopes over
             # file: scopes (more actionable), then newest. Extra scopes for
             # the same peer are redundant token weight. Mark served ONLY
             # what is actually emitted, so collapsed entries surface later.
-            candidates.sort(key=lambda a: (
-                not a['conflict'],
-                0 if a['scope'].startswith('/') else 1,
-                a['age_s']))
+            candidates.sort(
+                key=lambda a: (
+                    not a["conflict"],
+                    0 if a["scope"].startswith("/") else 1,
+                    a["age_s"],
+                )
+            )
             advisories = []
             seen_peers = set()
             for cand in candidates:
-                if cand['_sid'] in seen_peers:
+                if cand["_sid"] in seen_peers:
                     continue
-                seen_peers.add(cand['_sid'])
-                served[cand['_key']] = now
-                advisories.append({k: v for k, v in cand.items()
-                                   if not k.startswith('_')})
+                seen_peers.add(cand["_sid"])
+                served[cand["_key"]] = now
+                advisories.append({k: v for k, v in cand.items() if not k.startswith("_")})
                 if len(advisories) >= 3:
                     break
             if len(served) > 128:
                 for old_key in sorted(served, key=served.get)[:64]:
                     del served[old_key]
         if advisories:
-            result['_peers'] = advisories
+            result["_peers"] = advisories
             if me not in self._peer_hint_served:
-                result['_hint'] = 'load /multi-session-etiquette'
+                result["_hint"] = "load /multi-session-etiquette"
                 self._peer_hint_served.add(me)
-            if any(a['conflict'] for a in advisories):
+            if any(a["conflict"] for a in advisories):
                 worst = advisories[0]
                 self._log(
-                    'CONFLICT WARNING: session "{}" wrote {} ({}s ago) -- '
-                    'coordinate before continuing'.format(
-                        worst['label'], worst['scope'], worst['age_s']),
-                    'WARNING')
+                    'CONFLICT WARNING: session "{}" wrote {} ({}s ago) -- coordinate before continuing'.format(
+                        worst["label"], worst["scope"], worst["age_s"]
+                    ),
+                    "WARNING",
+                )
 
     def _baselineLogCursor(self, sid):
         """On first sight of a session (main thread, BEFORE executing its
         operation), start its cursor at the current end of the log ring so
         it is served exactly the warnings its own operations generate from
         here on -- not the whole ring's history, and not nothing."""
-        key = sid or '_anon'
+        key = sid or "_anon"
         if key in self._log_cursors:
             return
-        log_buffer = getattr(op.Embody.ext.Embody, '_log_buffer', None)
-        latest = log_buffer[-1]['id'] if log_buffer else 0
+        log_buffer = getattr(op.Embody.ext.Embody, "_log_buffer", None)
+        latest = log_buffer[-1]["id"] if log_buffer else 0
         # Crude cap so a long-lived TD session accumulating many
         # short-lived sids cannot grow unbounded; re-serving up to 8
         # warnings once after a clear is harmless.
@@ -3660,29 +3900,24 @@ class EnvoyExt:
         advances over ALL entries new to IT, so one session polling cannot
         consume warnings meant for another. The full INFO/DEBUG/SUCCESS
         history is available on demand via the get_logs tool."""
-        log_buffer = getattr(op.Embody.ext.Embody, '_log_buffer', None)
+        log_buffer = getattr(op.Embody.ext.Embody, "_log_buffer", None)
         if not log_buffer:
             return
-        key = sid or '_anon'
+        key = sid or "_anon"
         last_served = self._log_cursors.get(key, 0)
-        recent = [e for e in log_buffer
-                  if e['id'] > last_served]
+        recent = [e for e in log_buffer if e["id"] > last_served]
         if not recent:
             return
-        self._log_cursors[key] = recent[-1]['id']
-        notable = [e for e in recent
-                   if e.get('level') in ('WARNING', 'ERROR')]
+        self._log_cursors[key] = recent[-1]["id"]
+        notable = [e for e in recent if e.get("level") in ("WARNING", "ERROR")]
         if notable:
-            result['_logs'] = notable[-8:]
+            result["_logs"] = notable[-8:]
 
     def _send_response(self, request_id, result, sid=None):
         """Send a response back to the worker thread (token-lean log piggyback)."""
         self._attachNotableLogs(result, sid)
 
-        self.response_queue.put({
-            'id': request_id,
-            'result': result
-        })
+        self.response_queue.put({"id": request_id, "result": result})
 
     def _onRefresh(self):
         """
@@ -3709,20 +3944,23 @@ class EnvoyExt:
                 try:
                     expected = isinstance(e, Empty)
                 except NameError:
-                    expected = type(e).__name__ == 'Empty'
+                    expected = type(e).__name__ == "Empty"
                 if not expected:
-                    self._log(f'Unexpected error reading request queue: {type(e).__name__}: {e}', 'WARNING')
+                    self._log(
+                        f"Unexpected error reading request queue: {type(e).__name__}: {e}",
+                        "WARNING",
+                    )
                 break
             processed += 1
 
-            if not isinstance(info, dict) or 'operation' not in info:
-                self._log(f'Invalid payload received: {info}', 'WARNING')
+            if not isinstance(info, dict) or "operation" not in info:
+                self._log(f"Invalid payload received: {info}", "WARNING")
                 continue
 
-            request_id = info.get('id')
-            operation = info['operation']
-            params = info.get('params', {})
-            sid = info.get('sid')
+            request_id = info.get("id")
+            operation = info["operation"]
+            params = info.get("params", {})
+            sid = info.get("sid")
 
             # Baseline this session's log cursor BEFORE executing, so the
             # response carries the warnings THIS operation generates.
@@ -3740,26 +3978,25 @@ class EnvoyExt:
                 else:
                     # Deferred op (run_tests uses the -1 sentinel): deliver
                     # the refusal through its dedicated event holder.
-                    pending = getattr(sys, '_envoy_pending_test', None)
+                    pending = getattr(sys, "_envoy_pending_test", None)
                     if pending:
-                        pending['holder']['result'] = gate
-                        pending['event'].set()
+                        pending["holder"]["result"] = gate
+                        pending["event"].set()
                 continue
 
-            self._log(f'Processing: {operation}')
+            self._log(f"Processing: {operation}")
 
             result = self._execute_operation(operation, params)
 
             # Multi-session Phase 2: record write touches and gather peer
             # advisories. Never let awareness break the operation itself.
             try:
-                scopes = self._expandFileScopes(
-                    _scopes_for_operation(operation, params, result))
+                scopes = self._expandFileScopes(_scopes_for_operation(operation, params, result))
                 # Failed operations didn't mutate -- don't record them as
                 # writes. Exception: a failed batch may have partially
                 # succeeded (stops on first error), so it still counts.
-                failed = isinstance(result, dict) and 'error' in result
-                if not failed or operation == 'batch_operations':
+                failed = isinstance(result, dict) and "error" in result
+                if not failed or operation == "batch_operations":
                     self._recordTouches(sid, operation, scopes)
             except Exception:
                 scopes = []
@@ -3786,22 +4023,22 @@ class EnvoyExt:
 
     def _onServerSuccess(self, returnValue=None):
         """SuccessHook - Called when the thread task completes successfully"""
-        self._log('Server thread exited')
-        self.ownerComp.store('envoy_running', False)
+        self._log("Server thread exited")
+        self.ownerComp.store("envoy_running", False)
         self.current_task = None
         self._starting = False
         if self.ownerComp.par.Envoyenable.eval() and not self.ownerComp.ext.Embody._performMode:
-            self._scheduleRestart('Server exited unexpectedly')
+            self._scheduleRestart("Server exited unexpectedly")
         # If Envoyenable is already off, Stop() set the status -- don't overwrite
 
     def _onServerError(self, error):
         """ExceptHook - Called when the thread task errors"""
-        self._log(f'Server error: {error}', 'ERROR')
-        self.ownerComp.store('envoy_running', False)
+        self._log(f"Server error: {error}", "ERROR")
+        self.ownerComp.store("envoy_running", False)
         self.current_task = None
         self._starting = False
         if self.ownerComp.par.Envoyenable.eval() and not self.ownerComp.ext.Embody._performMode:
-            self._scheduleRestart(f'Server error: {error}')
+            self._scheduleRestart(f"Server error: {error}")
 
     def _scheduleRestart(self, reason: str):
         """Auto-restart the MCP server with exponential backoff, retrying for up
@@ -3820,25 +4057,33 @@ class EnvoyExt:
         if elapsed > self._RESTART_WINDOW_SECONDS:
             mins = int(self._RESTART_WINDOW_SECONDS // 60)
             self._log(
-                f'Server kept failing for over {mins} min '
-                f'({self._restart_count} attempts) -- giving up. Last: {reason}. '
-                f'Toggle Envoy off/on to retry.', 'ERROR')
-            self.ownerComp.par.Envoystatus = f'Error: {reason} (gave up after {mins} min)'
+                f"Server kept failing for over {mins} min "
+                f"({self._restart_count} attempts) -- giving up. Last: {reason}. "
+                f"Toggle Envoy off/on to retry.",
+                "ERROR",
+            )
+            self.ownerComp.par.Envoystatus = f"Error: {reason} (gave up after {mins} min)"
             self.ownerComp.par.Envoyenable = False
             return
 
         self._restart_count += 1
         # Exponential backoff: 1, 2, 4, 8, ... seconds, capped at the max gap.
-        delay = min(self._RESTART_BACKOFF_MAX,
-                    self._RESTART_BACKOFF_BASE * (2 ** (self._restart_count - 1)))
+        delay = min(
+            self._RESTART_BACKOFF_MAX,
+            self._RESTART_BACKOFF_BASE * (2 ** (self._restart_count - 1)),
+        )
         remaining = max(0, int((self._RESTART_WINDOW_SECONDS - elapsed) // 60))
         self._log(
-            f'Auto-restarting server (attempt {self._restart_count}, retry in '
-            f'{delay:.0f}s, ~{remaining} min left in retry window): {reason}', 'WARNING')
-        self.ownerComp.par.Envoystatus = (
-            f'Restarting (attempt {self._restart_count}, ~{remaining} min left)...')
-        run(f"op('{self.ownerComp.path}').ext.Envoy.Start()",
-            fromOP=self.ownerComp, delayMilliSeconds=int(delay * 1000))
+            f"Auto-restarting server (attempt {self._restart_count}, retry in "
+            f"{delay:.0f}s, ~{remaining} min left in retry window): {reason}",
+            "WARNING",
+        )
+        self.ownerComp.par.Envoystatus = f"Restarting (attempt {self._restart_count}, ~{remaining} min left)..."
+        run(
+            f"op('{self.ownerComp.path}').ext.Envoy.Start()",
+            fromOP=self.ownerComp,
+            delayMilliSeconds=int(delay * 1000),
+        )
 
     # === Operation Routing ===
 
@@ -3849,14 +4094,27 @@ class EnvoyExt:
     # frames), cook_op (cooking is not an undoable edit), and disk-only ops
     # (export_network, save_externalization) stay unwrapped.
     _UNDOABLE_OPS = frozenset({
-        'create_op', 'delete_op', 'copy_op', 'rename_op',
-        'set_parameter', 'connect_ops', 'disconnect_op',
-        'execute_python', 'set_dat_content', 'edit_dat_content',
-        'set_op_flags', 'set_op_position', 'layout_children',
-        'exec_op_method', 'externalize_op', 'remove_externalization_tag',
-        'create_extension', 'import_network',
-        'create_annotation', 'set_annotation',
-        'batch_operations',
+        "create_op",
+        "delete_op",
+        "copy_op",
+        "rename_op",
+        "set_parameter",
+        "connect_ops",
+        "disconnect_op",
+        "execute_python",
+        "set_dat_content",
+        "edit_dat_content",
+        "set_op_flags",
+        "set_op_position",
+        "layout_children",
+        "exec_op_method",
+        "externalize_op",
+        "remove_externalization_tag",
+        "create_extension",
+        "import_network",
+        "create_annotation",
+        "set_annotation",
+        "batch_operations",
     })
 
     def _execute_operation(self, operation: str, params: dict) -> dict:
@@ -3864,73 +4122,73 @@ class EnvoyExt:
         # 'override' belongs to the multi-session gate, not the handlers
         # (dispatch is handler(**params)); strip it here so batch
         # sub-operations that loop back through are covered too.
-        if params and 'override' in params:
-            params = {k: v for k, v in params.items() if k != 'override'}
+        if params and "override" in params:
+            params = {k: v for k, v in params.items() if k != "override"}
         handlers = {
-            'create_op': self._create_op,
-            'delete_op': self._delete_op,
-            'get_op': self._get_op,
-            'set_parameter': self._set_parameter,
-            'get_parameter': self._get_parameter,
-            'connect_ops': self._connect_ops,
-            'disconnect_op': self._disconnect_op,
-            'query_network': self._query_network,
-            'copy_op': self._copy_op,
-            'get_connections': self._get_connections,
-            'execute_python': self._execute_python,
+            "create_op": self._create_op,
+            "delete_op": self._delete_op,
+            "get_op": self._get_op,
+            "set_parameter": self._set_parameter,
+            "get_parameter": self._get_parameter,
+            "connect_ops": self._connect_ops,
+            "disconnect_op": self._disconnect_op,
+            "query_network": self._query_network,
+            "copy_op": self._copy_op,
+            "get_connections": self._get_connections,
+            "execute_python": self._execute_python,
             # DAT content
-            'get_dat_content': self._get_dat_content,
-            'set_dat_content': self._set_dat_content,
-            'edit_dat_content': self._edit_dat_content,
+            "get_dat_content": self._get_dat_content,
+            "set_dat_content": self._set_dat_content,
+            "edit_dat_content": self._edit_dat_content,
             # Operator flags
-            'get_op_flags': self._get_op_flags,
-            'set_op_flags': self._set_op_flags,
+            "get_op_flags": self._get_op_flags,
+            "set_op_flags": self._set_op_flags,
             # Operator positioning & layout
-            'get_op_position': self._get_op_position,
-            'get_network_layout': self._get_network_layout,
-            'set_op_position': self._set_op_position,
-            'layout_children': self._layout_children,
+            "get_op_position": self._get_op_position,
+            "get_network_layout": self._get_network_layout,
+            "set_op_position": self._set_op_position,
+            "layout_children": self._layout_children,
             # Extended operator management
-            'rename_op': self._rename_op,
-            'cook_op': self._cook_op,
-            'find_children': self._find_children,
-            'get_op_performance': self._get_op_performance,
-            'get_project_performance': self._get_project_performance,
+            "rename_op": self._rename_op,
+            "cook_op": self._cook_op,
+            "find_children": self._find_children,
+            "get_op_performance": self._get_op_performance,
+            "get_project_performance": self._get_project_performance,
             # Introspection & diagnostics
-            'get_td_info': self._get_td_info,
-            'get_op_errors': self._get_op_errors,
-            'exec_op_method': self._exec_op_method,
-            'get_td_classes': self._get_td_classes,
-            'get_td_class_details': self._get_td_class_details,
-            'get_module_help': self._get_module_help,
+            "get_td_info": self._get_td_info,
+            "get_op_errors": self._get_op_errors,
+            "exec_op_method": self._exec_op_method,
+            "get_td_classes": self._get_td_classes,
+            "get_td_class_details": self._get_td_class_details,
+            "get_module_help": self._get_module_help,
             # Documentation root discovery for worker-side get_docs
-            'get_docs_roots': self._get_docs_roots,
+            "get_docs_roots": self._get_docs_roots,
             # Embody integration
-            'externalize_op': self._externalize_op,
-            'remove_externalization_tag': self._remove_externalization_tag,
-            'get_externalizations': self._get_externalizations,
-            'save_externalization': self._save_externalization,
-            'get_externalization_status': self._get_externalization_status,
+            "externalize_op": self._externalize_op,
+            "remove_externalization_tag": self._remove_externalization_tag,
+            "get_externalizations": self._get_externalizations,
+            "save_externalization": self._save_externalization,
+            "get_externalization_status": self._get_externalization_status,
             # Extension creation
-            'create_extension': self._create_extension,
+            "create_extension": self._create_extension,
             # TDN network format
-            'export_network': self._export_network,
-            'import_network': self._import_network,
-            'read_tdn': self._read_tdn,
-            'diff_tdn': self._diff_tdn,
+            "export_network": self._export_network,
+            "import_network": self._import_network,
+            "read_tdn": self._read_tdn,
+            "diff_tdn": self._diff_tdn,
             # Annotations
-            'create_annotation': self._create_annotation,
-            'get_annotations': self._get_annotations,
-            'set_annotation': self._set_annotation,
-            'get_enclosed_ops': self._get_enclosed_ops,
+            "create_annotation": self._create_annotation,
+            "get_annotations": self._get_annotations,
+            "set_annotation": self._set_annotation,
+            "get_enclosed_ops": self._get_enclosed_ops,
             # Logging
-            'get_logs': self._get_logs,
+            "get_logs": self._get_logs,
             # TOP capture
-            'capture_top': self._capture_top,
+            "capture_top": self._capture_top,
             # Testing
-            'run_tests': self._run_tests,
+            "run_tests": self._run_tests,
             # Batch
-            'batch_operations': self._batch_operations,
+            "batch_operations": self._batch_operations,
         }
 
         handler = handlers.get(operation)
@@ -3942,7 +4200,7 @@ class EnvoyExt:
                 # .tdn is the user's source-of-truth being reloaded (the canonical
                 # TDN edit->import workflow), so writing the live state over it
                 # would corrupt the edit.
-                if operation == 'delete_op':
+                if operation == "delete_op":
                     try:
                         op.Embody.ext.Embody._preRiskyCheckpoint(operation, params)
                     except Exception:
@@ -3961,19 +4219,19 @@ class EnvoyExt:
                 self._noteCheckpointActivity(operation, params, result)
                 return result
             except Exception as e:
-                self._log(f'Operation {operation} failed: {e}', 'ERROR')
-                return {'error': str(e)}
-        return {'error': f'Unknown operation: {operation}'}
+                self._log(f"Operation {operation} failed: {e}", "ERROR")
+                return {"error": str(e)}
+        return {"error": f"Unknown operation: {operation}"}
 
     def _beginUndoBlock(self, operation: str) -> bool:
         if operation not in self._UNDOABLE_OPS or self._undo_active:
             return False
         try:
-            ui.undo.startBlock(f'Envoy {operation}')
+            ui.undo.startBlock(f"Envoy {operation}")
             self._undo_active = True
             return True
         except Exception as e:
-            self._log(f'Could not start undo block for {operation}: {e}', 'WARNING')
+            self._log(f"Could not start undo block for {operation}: {e}", "WARNING")
             return False
 
     def _endUndoBlock(self) -> None:
@@ -3984,7 +4242,7 @@ class EnvoyExt:
             # annotateCOMP creation tears down open undo blocks TD-internally,
             # making endBlock raise "Cannot end non existent undo operation"
             # (gotcha documented by TDMCP); never break dispatch for that.
-            self._log(f'Could not end undo block: {e}', 'DEBUG')
+            self._log(f"Could not end undo block: {e}", "DEBUG")
 
     # === Live Build Visualization: smooth follow + navigate to the active op ===
     # Embot mascot + network-editor camera follow. The whole subsystem now lives
@@ -4012,11 +4270,25 @@ class EnvoyExt:
     # exec_op_method are deliberately EXCLUDED (A1 skip+document -- the touched COMP
     # is unknowable; their edits are captured by the next typed op / Ctrl+S).
     _CHECKPOINT_MUTATING_OPS = frozenset({
-        'create_op', 'delete_op', 'set_parameter', 'connect_ops', 'disconnect_op',
-        'copy_op', 'rename_op', 'set_op_flags', 'set_op_position', 'layout_children',
-        'set_dat_content', 'edit_dat_content', 'create_annotation', 'set_annotation',
-        'create_extension', 'import_network', 'externalize_op', 'save_externalization',
-        'remove_externalization_tag',
+        "create_op",
+        "delete_op",
+        "set_parameter",
+        "connect_ops",
+        "disconnect_op",
+        "copy_op",
+        "rename_op",
+        "set_op_flags",
+        "set_op_position",
+        "layout_children",
+        "set_dat_content",
+        "edit_dat_content",
+        "create_annotation",
+        "set_annotation",
+        "create_extension",
+        "import_network",
+        "externalize_op",
+        "save_externalization",
+        "remove_externalization_tag",
     })
 
     def _noteCheckpointActivity(self, operation: str, params: dict, result) -> None:
@@ -4028,8 +4300,12 @@ class EnvoyExt:
             path = self._resolveActiveOp(operation, params, result)
             if not path:
                 # delete_op leaves no live op; fall back to the param path string.
-                path = (params.get('op_path') or params.get('target_path')
-                        or params.get('dest_path') or params.get('parent_path'))
+                path = (
+                    params.get("op_path")
+                    or params.get("target_path")
+                    or params.get("dest_path")
+                    or params.get("parent_path")
+                )
             if path:
                 op.Embody.ext.Embody.NoteCheckpointTouch(path)
         except Exception:
@@ -4041,43 +4317,43 @@ class EnvoyExt:
     # node.
     _OP_DESCRIPTIONS = {
         # TOPs
-        'noiseTOP': 'seeded a noise texture',
-        'rampTOP': 'laid down a gradient',
-        'constantTOP': 'filled a solid colour',
-        'transformTOP': 'repositioned the image',
-        'blurTOP': 'softened it with a blur',
-        'levelTOP': 'graded brightness & contrast',
-        'edgeTOP': 'traced the edges',
-        'compositeTOP': 'blended two layers',
-        'hsvadjustTOP': 'shifted hue & saturation',
-        'feedbackTOP': 'fed the output back in',
-        'glslTOP': 'ran a GLSL shader',
-        'renderTOP': 'rendered the scene',
-        'nullTOP': 'marked the output',
-        'outTOP': 'exposed the output',
+        "noiseTOP": "seeded a noise texture",
+        "rampTOP": "laid down a gradient",
+        "constantTOP": "filled a solid colour",
+        "transformTOP": "repositioned the image",
+        "blurTOP": "softened it with a blur",
+        "levelTOP": "graded brightness & contrast",
+        "edgeTOP": "traced the edges",
+        "compositeTOP": "blended two layers",
+        "hsvadjustTOP": "shifted hue & saturation",
+        "feedbackTOP": "fed the output back in",
+        "glslTOP": "ran a GLSL shader",
+        "renderTOP": "rendered the scene",
+        "nullTOP": "marked the output",
+        "outTOP": "exposed the output",
         # CHOPs
-        'lfoCHOP': 'set an oscillator going',
-        'mathCHOP': 'scaled the signal',
-        'filterCHOP': 'smoothed the motion',
-        'noiseCHOP': 'added some jitter',
-        'nullCHOP': 'marked the channel output',
+        "lfoCHOP": "set an oscillator going",
+        "mathCHOP": "scaled the signal",
+        "filterCHOP": "smoothed the motion",
+        "noiseCHOP": "added some jitter",
+        "nullCHOP": "marked the channel output",
         # SOPs
-        'gridSOP': 'built a point grid',
-        'noiseSOP': 'displaced the geometry',
-        'transformSOP': 'transformed the points',
-        'nullSOP': 'marked the geometry output',
+        "gridSOP": "built a point grid",
+        "noiseSOP": "displaced the geometry",
+        "transformSOP": "transformed the points",
+        "nullSOP": "marked the geometry output",
         # POPs
-        'gridPOP': 'built GPU points',
-        'noisePOP': 'displaced them on the GPU',
-        'nullPOP': 'marked the POP output',
+        "gridPOP": "built GPU points",
+        "noisePOP": "displaced them on the GPU",
+        "nullPOP": "marked the POP output",
         # MATs / COMPs / DATs
-        'phongMAT': 'set up a phong material',
-        'geometryCOMP': 'placed geometry to render',
-        'cameraCOMP': 'set up the camera',
-        'lightCOMP': 'added a light',
-        'baseCOMP': 'opened a sub-network',
-        'webclientDAT': 'wired up a web client',
-        'textDAT': 'dropped in a text DAT',
+        "phongMAT": "set up a phong material",
+        "geometryCOMP": "placed geometry to render",
+        "cameraCOMP": "set up the camera",
+        "lightCOMP": "added a light",
+        "baseCOMP": "opened a sub-network",
+        "webclientDAT": "wired up a web client",
+        "textDAT": "dropped in a text DAT",
     }
 
     def _actionText(self, operation: str, path: str) -> str:
@@ -4087,32 +4363,36 @@ class EnvoyExt:
         try:
             o = op(path)
             if o is not None:
-                note = (o.comment or '').strip()
+                note = (o.comment or "").strip()
                 if note:
                     return note
-                desc = self._OP_DESCRIPTIONS.get(o.OPType)   # OPType = 'noiseTOP'; .type = 'noise'
+                desc = self._OP_DESCRIPTIONS.get(o.OPType)  # OPType = 'noiseTOP'; .type = 'noise'
                 if desc:
                     return desc
         except Exception:
             pass
-        verbs = {'create_op': 'built', 'connect_ops': 'wired up',
-                 'set_parameter': 'tuned', 'import_network': 'rebuilt'}
-        return '%s %s' % (verbs.get(operation, 'worked on'), path.rsplit('/', 1)[-1])
+        verbs = {
+            "create_op": "built",
+            "connect_ops": "wired up",
+            "set_parameter": "tuned",
+            "import_network": "rebuilt",
+        }
+        return "%s %s" % (verbs.get(operation, "worked on"), path.rsplit("/", 1)[-1])
 
     def _resolveActiveOp(self, operation: str, params: dict, result) -> Optional[str]:
         """Best-effort path of the single op to move to. Prefers the path the
         handler reports (a freshly created op), else the param target."""
         try:
             if isinstance(result, dict):
-                for k in ('path', 'new_path', 'comp_path'):
+                for k in ("path", "new_path", "comp_path"):
                     v = result.get(k)
                     if v:
                         return v
-            if operation == 'connect_ops':
-                return params.get('dest_path')
-            if operation == 'import_network':
-                return params.get('target_path')
-            return params.get('op_path')
+            if operation == "connect_ops":
+                return params.get("dest_path")
+            if operation == "import_network":
+                return params.get("target_path")
+            return params.get("op_path")
         except Exception:
             return None
 
@@ -4128,11 +4408,12 @@ class EnvoyExt:
             f = self._crash_trace_f
             if f is None:
                 import os
-                d = os.path.join(project.folder, 'logs')
+
+                d = os.path.join(project.folder, "logs")
                 os.makedirs(d, exist_ok=True)
-                f = open(os.path.join(d, 'embot_crash_trace.log'), 'a')
+                f = open(os.path.join(d, "embot_crash_trace.log"), "a")
                 self._crash_trace_f = f
-            f.write('f%d %.3f %s\n' % (absTime.frame, absTime.seconds, msg))
+            f.write("f%d %.3f %s\n" % (absTime.frame, absTime.seconds, msg))
             f.flush()
         except Exception:
             pass
@@ -4149,7 +4430,7 @@ class EnvoyExt:
         """Stand Embot on / pan camera to the active op -- see envoy_viz."""
         return mod.envoy_viz.trackActive(self, now, follow, show_bot)
 
-    def _pickFollowPane(self, net: 'COMP'):
+    def _pickFollowPane(self, net: "COMP"):
         """Choose the pane to follow a network in -- see envoy_viz."""
         return mod.envoy_viz.pickFollowPane(self, net)
 
@@ -4157,19 +4438,19 @@ class EnvoyExt:
         """True while the user has navigated the follow pane away -- see envoy_viz."""
         return mod.envoy_viz.userTookOver(self, pane)
 
-    def _navigateAndFrame(self, pane, net: 'COMP', target: 'OP') -> None:
+    def _navigateAndFrame(self, pane, net: "COMP", target: "OP") -> None:
         """Cut a pane into a network and frame the target op -- see envoy_viz."""
         return mod.envoy_viz.navigateAndFrame(self, pane, net, target)
 
-    def _glideStep(self, pane, target: 'OP') -> None:
+    def _glideStep(self, pane, target: "OP") -> None:
         """One eased frame of the camera glide toward the op -- see envoy_viz."""
         return mod.envoy_viz.glideStep(self, pane, target)
 
-    def _highlightOp(self, target: 'OP') -> None:
+    def _highlightOp(self, target: "OP") -> None:
         """Select + make-current the op being worked -- see envoy_viz."""
         return mod.envoy_viz.highlightOp(self, target)
 
-    def _pulseStart(self, target: 'OP', now: float) -> None:
+    def _pulseStart(self, target: "OP", now: float) -> None:
         """Begin a colour pulse on the active op -- see envoy_viz."""
         return mod.envoy_viz.pulseStart(self, target, now)
 
@@ -4181,11 +4462,11 @@ class EnvoyExt:
         """Restore the pulsing op's original colour -- see envoy_viz."""
         return mod.envoy_viz.restorePulse(self)
 
-    def _placeBot(self, net: 'COMP', target: 'OP', now: float) -> None:
+    def _placeBot(self, net: "COMP", target: "OP", now: float) -> None:
         """Bring Embot to stand on the active op -- see envoy_viz."""
         return mod.envoy_viz.placeBot(self, net, target, now)
 
-    def _stageOffset(self, net: 'COMP') -> float:
+    def _stageOffset(self, net: "COMP") -> float:
         """Off-view staging offset for spread assembly -- see envoy_viz."""
         return mod.envoy_viz.stageOffset(self, net)
 
@@ -4197,19 +4478,19 @@ class EnvoyExt:
         """Build/return Embot's source template -- see envoy_viz."""
         return mod.envoy_viz.ensureTemplate(self)
 
-    def _ensureBot(self, net: 'COMP') -> bool:
+    def _ensureBot(self, net: "COMP") -> bool:
         """Ensure Embot is present/assembling in a network -- see envoy_viz."""
         return mod.envoy_viz.ensureBot(self, net)
 
-    def _netIsDisplayed(self, net: 'COMP') -> bool:
+    def _netIsDisplayed(self, net: "COMP") -> bool:
         """True if a network-editor pane shows the net -- see envoy_viz."""
         return mod.envoy_viz.netIsDisplayed(self, net)
 
-    def _blockSpawn(self, net: 'COMP') -> None:
+    def _blockSpawn(self, net: "COMP") -> None:
         """One-shot block copy of all parts into an off-screen net -- see envoy_viz."""
         return mod.envoy_viz.blockSpawn(self, net)
 
-    def _assembleStep(self, net: 'COMP') -> None:
+    def _assembleStep(self, net: "COMP") -> None:
         """Copy one queued template part into the net -- see envoy_viz."""
         return mod.envoy_viz.assembleStep(self, net)
 
@@ -4229,7 +4510,7 @@ class EnvoyExt:
         """Animate the figure: hop, hover, gesture, colour -- see envoy_viz."""
         return mod.envoy_viz.botDance(self, now)
 
-    def _botUnsafeNet(self, net: 'COMP') -> bool:
+    def _botUnsafeNet(self, net: "COMP") -> bool:
         """True if a bot must not be created in the net -- see envoy_viz."""
         return mod.envoy_viz.botUnsafeNet(self, net)
 
@@ -4273,18 +4554,18 @@ class EnvoyExt:
         dict, because the sentinel request_id=-1 would be silently dropped
         by check_responses, leaving the worker thread blocked.
         """
-        pending = getattr(sys, '_envoy_pending_test', None)
+        pending = getattr(sys, "_envoy_pending_test", None)
         if pending is None:
             # Worker thread hasn't set up sys._envoy_pending_test yet.
             # This shouldn't happen because the worker sets it before queuing.
-            return {'error': 'Test pending state not initialized'}
+            return {"error": "Test pending state not initialized"}
 
         test_comp = op.unit_tests
         if not test_comp:
-            self._signalTestError(pending, 'Test framework not found (op.unit_tests)')
+            self._signalTestError(pending, "Test framework not found (op.unit_tests)")
             return None
         if not test_comp.extensionsReady:
-            self._signalTestError(pending, 'Test framework extension not ready')
+            self._signalTestError(pending, "Test framework extension not ready")
             return None
         try:
             # Suppress Embody's Update/Refresh cycle during tests to
@@ -4292,58 +4573,59 @@ class EnvoyExt:
             # test-created operators making COMPs structurally dirty.
             embody = op.Embody
             self._test_saved_status = embody.par.Status.eval()
-            embody.par.Status = 'Testing'
-            test_comp.RunTestsDeferredPerTest(
-                suite_name=suite_name, test_name=test_name)
+            embody.par.Status = "Testing"
+            test_comp.RunTestsDeferredPerTest(suite_name=suite_name, test_name=test_name)
             self._schedulePollTestCompletion()
             return None  # Deferred -- worker thread waits on sys._envoy_pending_test['event']
         except Exception as e:
             self._restoreStatusAfterTests()
-            self._signalTestError(pending, f'Test run failed: {e}')
+            self._signalTestError(pending, f"Test run failed: {e}")
             return None
 
     def _restoreStatusAfterTests(self):
         """Re-enable Embody's Update cycle after tests complete."""
-        saved = getattr(self, '_test_saved_status', None)
+        saved = getattr(self, "_test_saved_status", None)
         if saved is not None:
             op.Embody.par.Status = saved
             self._test_saved_status = None
 
     def _signalTestError(self, pending, message):
         """Signal an error to the waiting worker thread via the test Event."""
-        pending['holder']['result'] = {'error': message}
-        pending['event'].set()
+        pending["holder"]["result"] = {"error": message}
+        pending["event"].set()
         sys._envoy_pending_test = None
 
     def _schedulePollTestCompletion(self):
         """Schedule the test completion poll via run() with a string
         expression that resolves the live extension instance at call time."""
-        run(f"op('{self.ownerComp.path}').ext.Envoy._pollTestCompletion()",
-            fromOP=self.ownerComp, delayFrames=5)
+        run(
+            f"op('{self.ownerComp.path}').ext.Envoy._pollTestCompletion()",
+            fromOP=self.ownerComp,
+            delayFrames=5,
+        )
 
     def _pollTestCompletion(self):
         """Check if deferred test run has finished; signal worker thread if so."""
-        pending = getattr(sys, '_envoy_pending_test', None)
+        pending = getattr(sys, "_envoy_pending_test", None)
         if pending is None:
             return  # Already handled or cancelled
         test_comp = op.unit_tests
         if not test_comp or not test_comp.extensionsReady:
             self._schedulePollTestCompletion()
             return
-        runner = getattr(test_comp.ext, 'TestRunnerExt', None)
+        runner = getattr(test_comp.ext, "TestRunnerExt", None)
         if runner and not runner._running:
             self._restoreStatusAfterTests()
             result = runner._getSummary()
             # Token-lean: drop the per-test PASS objects (the full suite is
             # ~1400 of them) -- keep the counts and only the failures/errors.
             # Full per-test detail is in the test log file under dev/logs/.
-            if isinstance(result.get('results'), list):
-                result['results'] = [r for r in result['results']
-                                     if r.get('status') != 'PASS']
+            if isinstance(result.get("results"), list):
+                result["results"] = [r for r in result["results"] if r.get("status") != "PASS"]
             self._attachNotableLogs(result)
             # Signal the worker thread directly via the Event
-            pending['holder']['result'] = result
-            pending['event'].set()
+            pending["holder"]["result"] = result
+            pending["event"].set()
         else:
             self._schedulePollTestCompletion()
 
@@ -4356,25 +4638,25 @@ class EnvoyExt:
         Returns {'success': bool, 'results': [...], 'count': int}.
         """
         if not isinstance(operations, list):
-            return {'error': 'operations must be a list'}
+            return {"error": "operations must be a list"}
         results = []
         for i, op_spec in enumerate(operations):
-            if not isinstance(op_spec, dict) or 'tool' not in op_spec:
-                results.append({'error': f'Invalid operation at index {i}'})
+            if not isinstance(op_spec, dict) or "tool" not in op_spec:
+                results.append({"error": f"Invalid operation at index {i}"})
                 break
-            tool = op_spec['tool']
-            params = op_spec.get('params', {})
-            if tool == 'batch_operations':
-                results.append({'error': 'Nested batch_operations not allowed'})
+            tool = op_spec["tool"]
+            params = op_spec.get("params", {})
+            if tool == "batch_operations":
+                results.append({"error": "Nested batch_operations not allowed"})
                 break
             result = self._execute_operation(tool, params)
             results.append(result)
-            if 'error' in result:
+            if "error" in result:
                 break
         return {
-            'success': not any('error' in r for r in results),
-            'results': results,
-            'count': len(results),
+            "success": not any("error" in r for r in results),
+            "results": results,
+            "count": len(results),
         }
 
     # --- Operator Management ---
@@ -4393,28 +4675,40 @@ class EnvoyExt:
 
     # Sole consumer is envoy_ops.grow_sequence_for (via ext._SEQ_PAR_RE) --
     # kept here so the module DAT needs no re import.
-    _SEQ_PAR_RE = re.compile(r'^([A-Za-z]+?)(\d+)([A-Za-z0-9]*)$')
+    _SEQ_PAR_RE = re.compile(r"^([A-Za-z]+?)(\d+)([A-Za-z0-9]*)$")
 
-    def _set_parameter(self, op_path: str, par_name: str, value=None,
-                      mode: str = None, expr: str = None,
-                      bind_expr: str = None) -> dict:
+    def _set_parameter(
+        self,
+        op_path: str,
+        par_name: str,
+        value=None,
+        mode: str = None,
+        expr: str = None,
+        bind_expr: str = None,
+    ) -> dict:
         """Set a parameter value, expression, bind expression, or mode -- see envoy_ops."""
         return mod.envoy_ops.set_parameter(self, op_path, par_name, value, mode, expr, bind_expr)
 
-    def _get_parameter(self, op_path: str, par_name: str = None,
-                      search: str = None, search_in: str = 'any',
-                      depth: int = 2, max_results: int = 50,
-                      details: bool = False) -> dict:
+    def _get_parameter(
+        self,
+        op_path: str,
+        par_name: str = None,
+        search: str = None,
+        search_in: str = "any",
+        depth: int = 2,
+        max_results: int = 50,
+        details: bool = False,
+    ) -> dict:
         """Get a parameter value with full details"""
         target = op(op_path)
         if not target:
-            return {'error': f'Operator not found: {op_path}'}
+            return {"error": f"Operator not found: {op_path}"}
 
         if search is not None:
-            valid_search = ('name', 'value', 'expr', 'any')
-            search_in = (search_in or 'any').lower()
+            valid_search = ("name", "value", "expr", "any")
+            search_in = (search_in or "any").lower()
             if search_in not in valid_search:
-                return {'error': 'Invalid search_in. Use: name, value, expr, any'}
+                return {"error": "Invalid search_in. Use: name, value, expr, any"}
             try:
                 depth = int(depth)
             except Exception:
@@ -4429,8 +4723,8 @@ class EnvoyExt:
             # Finding absolute-path expressions project-wide is an Embody
             # code-review rule turned into a query (idea from TDMCP).
             pattern = str(search).lower()
-            if not any(ch in pattern for ch in '*?['):
-                pattern = f'*{pattern}*'
+            if not any(ch in pattern for ch in "*?["):
+                pattern = f"*{pattern}*"
 
             ops_to_scan = [target]
             try:
@@ -4449,15 +4743,15 @@ class EnvoyExt:
                     try:
                         mode_name = p.mode.name
                     except Exception:
-                        mode_name = str(getattr(p, 'mode', ''))
+                        mode_name = str(getattr(p, "mode", ""))
 
                     matched = False
-                    if search_in in ('name', 'any'):
+                    if search_in in ("name", "any"):
                         matched = fnmatch.fnmatch(p.name.lower(), pattern)
 
                     value_text = None
-                    if search_in in ('value', 'any') and not matched:
-                        if search_in == 'any' and mode_name != 'CONSTANT':
+                    if search_in in ("value", "any") and not matched:
+                        if search_in == "any" and mode_name != "CONSTANT":
                             pass
                         else:
                             try:
@@ -4466,13 +4760,13 @@ class EnvoyExt:
                             except Exception:
                                 pass
 
-                    if search_in in ('expr', 'any') and not matched:
-                        if mode_name == 'EXPRESSION':
+                    if search_in in ("expr", "any") and not matched:
+                        if mode_name == "EXPRESSION":
                             try:
                                 matched = fnmatch.fnmatch(str(p.expr).lower(), pattern)
                             except Exception:
                                 pass
-                        elif mode_name == 'BIND':
+                        elif mode_name == "BIND":
                             try:
                                 matched = fnmatch.fnmatch(str(p.bindExpr).lower(), pattern)
                             except Exception:
@@ -4484,21 +4778,21 @@ class EnvoyExt:
                         try:
                             value_text = str(p.eval())
                         except Exception as e:
-                            value_text = f'<eval error: {e}>'
+                            value_text = f"<eval error: {e}>"
                     hit = {
-                        'op': o.path,
-                        'par': p.name,
-                        'value': value_text,
-                        'mode': mode_name,
+                        "op": o.path,
+                        "par": p.name,
+                        "value": value_text,
+                        "mode": mode_name,
                     }
-                    if mode_name == 'EXPRESSION':
+                    if mode_name == "EXPRESSION":
                         try:
-                            hit['expr'] = p.expr
+                            hit["expr"] = p.expr
                         except Exception:
                             pass
-                    elif mode_name == 'BIND':
+                    elif mode_name == "BIND":
                         try:
-                            hit['bindExpr'] = p.bindExpr
+                            hit["bindExpr"] = p.bindExpr
                         except Exception:
                             pass
                     hits.append(hit)
@@ -4509,83 +4803,92 @@ class EnvoyExt:
                     break
 
             result = {
-                'root': op_path,
-                'pattern': search,
-                'search_in': search_in,
-                'count': len(hits),
-                'results': hits,
+                "root": op_path,
+                "pattern": search,
+                "search_in": search_in,
+                "count": len(hits),
+                "results": hits,
             }
             if truncated:
-                result['truncated'] = True
+                result["truncated"] = True
             return result
 
         if par_name is None:
-            return {'error': 'Provide par_name, or search for pattern mode'}
+            return {"error": "Provide par_name, or search for pattern mode"}
 
         if not hasattr(target.par, par_name):
-            return {'error': f'Parameter not found: {par_name}'}
+            return {"error": f"Parameter not found: {par_name}"}
 
         try:
             par = getattr(target.par, par_name)
             result = {
-                'path': op_path,
-                'parameter': par_name,
-                'value': str(par.eval()),
-                'mode': str(par.mode),
-                'label': par.label,
+                "path": op_path,
+                "parameter": par_name,
+                "value": str(par.eval()),
+                "mode": str(par.mode),
+                "label": par.label,
             }
             if details:
                 result.update({
-                    'default': str(par.default),
-                    'isCustom': par.isCustom,
-                    'readOnly': par.readOnly,
-                    'style': par.style,
+                    "default": str(par.default),
+                    "isCustom": par.isCustom,
+                    "readOnly": par.readOnly,
+                    "style": par.style,
                 })
 
             # Mode-specific details
-            if par.mode.name == 'EXPRESSION':
-                result['expression'] = par.expr
-            elif par.mode.name == 'BIND':
-                result['bindExpr'] = par.bindExpr
-                result['bindMaster'] = par.bindMaster.path if par.bindMaster else None
-            elif par.mode.name == 'EXPORT':
-                result['exportOP'] = par.exportOP.path if par.exportOP else None
+            if par.mode.name == "EXPRESSION":
+                result["expression"] = par.expr
+            elif par.mode.name == "BIND":
+                result["bindExpr"] = par.bindExpr
+                result["bindMaster"] = par.bindMaster.path if par.bindMaster else None
+            elif par.mode.name == "EXPORT":
+                result["exportOP"] = par.exportOP.path if par.exportOP else None
                 if details:
-                    result['exportSource'] = str(par.exportSource) if par.exportSource else None
+                    result["exportSource"] = str(par.exportSource) if par.exportSource else None
 
             # Numeric range info
             if details and par.isNumber:
-                result['min'] = par.min
-                result['max'] = par.max
-                result['clampMin'] = par.clampMin
-                result['clampMax'] = par.clampMax
-                result['normMin'] = par.normMin
-                result['normMax'] = par.normMax
+                result["min"] = par.min
+                result["max"] = par.max
+                result["clampMin"] = par.clampMin
+                result["clampMax"] = par.clampMax
+                result["normMin"] = par.normMin
+                result["normMax"] = par.normMax
 
             # Menu info
             if par.isMenu:
-                result['menuNames'] = par.menuNames
+                result["menuNames"] = par.menuNames
                 if details:
-                    result['menuLabels'] = par.menuLabels
-                    result['menuIndex'] = par.menuIndex
+                    result["menuLabels"] = par.menuLabels
+                    result["menuIndex"] = par.menuIndex
 
             return result
         except Exception as e:
-            return {'error': f'Failed to get parameter: {e}'}
+            return {"error": f"Failed to get parameter: {e}"}
 
-    def _connect_ops(self, source_path: str, dest_path: str,
-                          source_index: int = 0, dest_index: int = 0,
-                          comp: bool = False) -> dict:
+    def _connect_ops(
+        self,
+        source_path: str,
+        dest_path: str,
+        source_index: int = 0,
+        dest_index: int = 0,
+        comp: bool = False,
+    ) -> dict:
         """Connect two operators -- see envoy_ops."""
         return mod.envoy_ops.connect_ops(self, source_path, dest_path, source_index, dest_index, comp)
 
-    def _disconnect_op(self, op_path: str, input_index: int = 0,
-                            comp: bool = False) -> dict:
+    def _disconnect_op(self, op_path: str, input_index: int = 0, comp: bool = False) -> dict:
         """Disconnect an operator's input -- see envoy_ops."""
         return mod.envoy_ops.disconnect_op(self, op_path, input_index, comp)
 
-    def _query_network(self, parent_path: str = "/", recursive: bool = False,
-                      op_type: str = None, include_utility: bool = False) -> dict:
+    def _query_network(
+        self,
+        parent_path: str = "/",
+        recursive: bool = False,
+        op_type: str = None,
+        include_utility: bool = False,
+    ) -> dict:
         """List operators in a network -- see envoy_read."""
         return mod.envoy_read.query_network(self, parent_path, recursive, op_type, include_utility)
 
@@ -4626,22 +4929,27 @@ class EnvoyExt:
             hugged = 0
             for o in new_ops:
                 docks = self._sameNetworkDocks(o)
-                if docks and any(abs(d.nodeX - o.nodeX) > 350
-                                 or abs(d.nodeY - o.nodeY) > 350 for d in docks):
+                if docks and any(abs(d.nodeX - o.nodeX) > 350 or abs(d.nodeY - o.nodeY) > 350 for d in docks):
                     hugged += self._placeDockedOps(o)
             if hugged:
                 self._log(
-                    'LAYOUT: auto-hugged %d scattered docked op(s) below their '
-                    'newly-created host(s); re-run get_network_layout if you '
-                    'planned positions around them.' % hugged, 'WARNING')
+                    "LAYOUT: auto-hugged %d scattered docked op(s) below their "
+                    "newly-created host(s); re-run get_network_layout if you "
+                    "planned positions around them." % hugged,
+                    "WARNING",
+                )
             for par in new_parents.values():
                 issues = self._lintLayout(par)
                 if issues:
                     self._log(
-                        'LAYOUT WARNING: ' + par.path + ' -- ' + '; '.join(issues)
-                        + '. execute_python does NOT auto-position ops (create_op does); '
-                        'run get_network_layout and reposition per network-layout.md.',
-                        'WARNING')
+                        "LAYOUT WARNING: "
+                        + par.path
+                        + " -- "
+                        + "; ".join(issues)
+                        + ". execute_python does NOT auto-position ops (create_op does); "
+                        "run get_network_layout and reposition per network-layout.md.",
+                        "WARNING",
+                    )
             self._warnAutoExternalizeBypass(new_ops)
         except Exception:
             pass
@@ -4655,24 +4963,25 @@ class EnvoyExt:
         create_op as the preferred creation path."""
         try:
             emb = op.Embody.ext.Embody
-            if op.Embody.par.Autoexternalize.eval() == 'neither':
+            if op.Embody.par.Autoexternalize.eval() == "neither":
                 return
             bypassed = [o.path for o in new_ops if emb._autoExternalizeTagFor(o)]
             if bypassed:
-                shown = ', '.join(bypassed[:5]) + ('...' if len(bypassed) > 5 else '')
+                shown = ", ".join(bypassed[:5]) + ("..." if len(bypassed) > 5 else "")
                 self._log(
-                    'AUTO-EXTERNALIZE BYPASS: ' + str(len(bypassed)) + ' op(s) created '
-                    'via execute_python were NOT auto-externalized (' + shown + '). '
-                    'create_op is the preferred creation path and auto-externalizes; '
-                    'recreate via create_op, or tag manually with externalize_op.',
-                    'WARNING')
+                    "AUTO-EXTERNALIZE BYPASS: " + str(len(bypassed)) + " op(s) created "
+                    "via execute_python were NOT auto-externalized (" + shown + "). "
+                    "create_op is the preferred creation path and auto-externalizes; "
+                    "recreate via create_op, or tag manually with externalize_op.",
+                    "WARNING",
+                )
         except Exception:
             pass
 
     def _execute_python(self, code: str) -> dict:
         """Execute arbitrary Python code"""
-        code_preview = code[:200] + ('...' if len(code) > 200 else '')
-        self._log(f'execute_python: {code_preview}')
+        code_preview = code[:200] + ("..." if len(code) > 200 else "")
+        self._log(f"execute_python: {code_preview}")
         try:
             # Snapshot op paths so we can lint ONLY the ops this call creates.
             # execute_python uses raw comp.create()/copy() (no auto-position),
@@ -4687,30 +4996,30 @@ class EnvoyExt:
 
             # Create a namespace with useful globals
             namespace = {
-                'op': op,
-                'ops': ops,
-                'parent': parent,
-                'root': root,
-                'me': self.ownerComp,
-                'result': None
+                "op": op,
+                "ops": ops,
+                "parent": parent,
+                "root": root,
+                "me": self.ownerComp,
+                "result": None,
             }
 
             exec(code, namespace)
 
             # Return the 'result' variable if set
-            result = namespace.get('result')
-            self._log(f'execute_python: completed successfully')
+            result = namespace.get("result")
+            self._log(f"execute_python: completed successfully")
             self._lintNewOps(pre_paths)
             if result is not None:
-                return {'success': True, 'result': str(result)}
-            return {'success': True}
+                return {"success": True, "result": str(result)}
+            return {"success": True}
         except Exception as e:
-            self._log(f'execute_python failed: {e}', 'ERROR')
+            self._log(f"execute_python failed: {e}", "ERROR")
             removed = self._rollbackNewOps(pre_paths)
-            msg = f'Execution failed: {e}'
+            msg = f"Execution failed: {e}"
             if removed:
-                msg += f' (rolled back {removed} operator(s) the script created before failing)'
-            return {'error': msg}
+                msg += f" (rolled back {removed} operator(s) the script created before failing)"
+            return {"error": msg}
 
     def _rollbackNewOps(self, pre_paths) -> int:
         """A failed execute_python must not leave a half-built network: destroy
@@ -4730,13 +5039,12 @@ class EnvoyExt:
                         post.append(o)
                 except Exception:
                     pass
-            post.sort(key=lambda o: o.path.count('/'))
+            post.sort(key=lambda o: o.path.count("/"))
             destroyed_roots = []
             for o in post:
                 try:
                     path = o.path
-                    if any(path.startswith(root_path + '/')
-                           for root_path in destroyed_roots):
+                    if any(path.startswith(root_path + "/") for root_path in destroyed_roots):
                         continue
                     if not o.valid:
                         continue
@@ -4754,11 +5062,11 @@ class EnvoyExt:
     def _get_docs_roots(self) -> dict:
         """Candidate offline-help mirror locations (App Class, main thread)."""
         try:
-            samples = str(app.samplesFolder).replace('\\', '/').rstrip('/')
-            roots = [samples + '/Learn/offlineHelp/https.docs.derivative.ca']
-            return {'roots': roots}
+            samples = str(app.samplesFolder).replace("\\", "/").rstrip("/")
+            roots = [samples + "/Learn/offlineHelp/https.docs.derivative.ca"]
+            return {"roots": roots}
         except Exception as e:
-            return {'roots': [], 'error': f'Failed to get docs roots: {e}'}
+            return {"roots": [], "error": f"Failed to get docs roots: {e}"}
 
     def _get_td_info(self) -> dict:
         """Get TouchDesigner environment and Envoy server info -- see envoy_read."""
@@ -4768,8 +5076,7 @@ class EnvoyExt:
         """Get error and warning messages for an operator and its children -- see envoy_read."""
         return mod.envoy_read.get_op_errors(self, op_path, recurse)
 
-    def _exec_op_method(self, op_path: str, method: str,
-                          args: list = None, kwargs: dict = None) -> dict:
+    def _exec_op_method(self, op_path: str, method: str, args: list = None, kwargs: dict = None) -> dict:
         """Call a method on a TD operator -- see envoy_read."""
         return mod.envoy_read.exec_op_method(self, op_path, method, args, kwargs)
 
@@ -4791,23 +5098,39 @@ class EnvoyExt:
         """Get DAT content as text or table data -- see envoy_read."""
         return mod.envoy_read.get_dat_content(self, op_path, format)
 
-    def _set_dat_content(self, op_path: str, text: str = None,
-                        rows: list = None, clear: bool = False,
-                        confirm_wipe: bool = False) -> dict:
+    def _set_dat_content(
+        self,
+        op_path: str,
+        text: str = None,
+        rows: list = None,
+        clear: bool = False,
+        confirm_wipe: bool = False,
+    ) -> dict:
         """Set DAT content from text or table rows -- see envoy_ops."""
         return mod.envoy_ops.set_dat_content(self, op_path, text, rows, clear, confirm_wipe)
 
-    def _edit_dat_content(self, op_path: str, old_string: str,
-                         new_string: str, replace_all: bool = False,
-                         confirm_wipe: bool = False) -> dict:
+    def _edit_dat_content(
+        self,
+        op_path: str,
+        old_string: str,
+        new_string: str,
+        replace_all: bool = False,
+        confirm_wipe: bool = False,
+    ) -> dict:
         """Surgical text edit on a DAT -- see envoy_ops."""
         return mod.envoy_ops.edit_dat_content(self, op_path, old_string, new_string, replace_all, confirm_wipe)
 
     # === TOP Capture (Main Thread Only) ===
 
-    def _capture_top(self, op_path: str, format: str = 'jpeg',
-                     quality: float = 0.8, max_resolution: int = 640,
-                     inline: bool = False, sample_grid: int = 0) -> dict:
+    def _capture_top(
+        self,
+        op_path: str,
+        format: str = "jpeg",
+        quality: float = 0.8,
+        max_resolution: int = 640,
+        inline: bool = False,
+        sample_grid: int = 0,
+    ) -> dict:
         """Capture a TOP operator's output as a compressed image -- see envoy_read."""
         return mod.envoy_read.capture_top(self, op_path, format, quality, max_resolution, inline, sample_grid)
 
@@ -4817,13 +5140,33 @@ class EnvoyExt:
         """Get all flags for an operator -- see envoy_read."""
         return mod.envoy_read.get_op_flags(self, op_path)
 
-    def _set_op_flags(self, op_path: str, bypass: bool = None, lock: bool = None,
-                     display: bool = None, render: bool = None,
-                     viewer: bool = None, current: bool = None,
-                     expose: bool = None, allowCooking: bool = None,
-                     selected: bool = None) -> dict:
+    def _set_op_flags(
+        self,
+        op_path: str,
+        bypass: bool = None,
+        lock: bool = None,
+        display: bool = None,
+        render: bool = None,
+        viewer: bool = None,
+        current: bool = None,
+        expose: bool = None,
+        allowCooking: bool = None,
+        selected: bool = None,
+    ) -> dict:
         """Set flags on an operator -- see envoy_ops."""
-        return mod.envoy_ops.set_op_flags(self, op_path, bypass, lock, display, render, viewer, current, expose, allowCooking, selected)
+        return mod.envoy_ops.set_op_flags(
+            self,
+            op_path,
+            bypass,
+            lock,
+            display,
+            render,
+            viewer,
+            current,
+            expose,
+            allowCooking,
+            selected,
+        )
 
     # === Node Positioning & Layout (Main Thread Only) ===
 
@@ -4847,9 +5190,16 @@ class EnvoyExt:
         """Get positions of all operators and annotations in a COMP -- see envoy_read."""
         return mod.envoy_read.get_network_layout(self, comp_path, include_annotations)
 
-    def _set_op_position(self, op_path: str, x: int = None, y: int = None,
-                        width: int = None, height: int = None,
-                        color: list = None, comment: str = None) -> dict:
+    def _set_op_position(
+        self,
+        op_path: str,
+        x: int = None,
+        y: int = None,
+        width: int = None,
+        height: int = None,
+        color: list = None,
+        comment: str = None,
+    ) -> dict:
         """Set operator position and visual properties -- see envoy_ops."""
         return mod.envoy_ops.set_op_position(self, op_path, x, y, width, height, color, comment)
 
@@ -4857,26 +5207,47 @@ class EnvoyExt:
         """Auto-layout children in a COMP"""
         target = op(op_path)
         if not target:
-            return {'error': f'Operator not found: {op_path}'}
+            return {"error": f"Operator not found: {op_path}"}
         if not target.isCOMP:
-            return {'error': f'{op_path} is not a COMP'}
+            return {"error": f"{op_path} is not a COMP"}
 
         try:
             target.layout()
-            return {'success': True, 'path': op_path}
+            return {"success": True, "path": op_path}
         except Exception as e:
-            return {'error': f'Failed to layout: {e}'}
+            return {"error": f"Failed to layout: {e}"}
 
     # === Annotations (Main Thread Only) ===
 
-    def _create_annotation(self, parent_path: str, mode: str = "annotate",
-                           text: str = "", title: str = "",
-                           x: int = None, y: int = None,
-                           width: int = None, height: int = None,
-                           color: list = None, opacity: float = None,
-                           name: str = None) -> dict:
+    def _create_annotation(
+        self,
+        parent_path: str,
+        mode: str = "annotate",
+        text: str = "",
+        title: str = "",
+        x: int = None,
+        y: int = None,
+        width: int = None,
+        height: int = None,
+        color: list = None,
+        opacity: float = None,
+        name: str = None,
+    ) -> dict:
         """Create an annotation in the network editor -- see envoy_ops."""
-        return mod.envoy_ops.create_annotation(self, parent_path, mode, text, title, x, y, width, height, color, opacity, name)
+        return mod.envoy_ops.create_annotation(
+            self,
+            parent_path,
+            mode,
+            text,
+            title,
+            x,
+            y,
+            width,
+            height,
+            color,
+            opacity,
+            name,
+        )
 
     def _get_annotations(self, parent_path: str) -> dict:
         """List all annotations in a COMP -- see envoy_read."""
@@ -4886,10 +5257,18 @@ class EnvoyExt:
         """Resolve an annotation path, including utility-flagged ones -- see envoy_read."""
         return mod.envoy_read.resolve_annotation(self, op_path)
 
-    def _set_annotation(self, op_path: str, text: str = None, title: str = None,
-                        color: list = None, opacity: float = None,
-                        width: int = None, height: int = None,
-                        x: int = None, y: int = None) -> dict:
+    def _set_annotation(
+        self,
+        op_path: str,
+        text: str = None,
+        title: str = None,
+        color: list = None,
+        opacity: float = None,
+        width: int = None,
+        height: int = None,
+        x: int = None,
+        y: int = None,
+    ) -> dict:
         """Modify an existing annotation -- see envoy_ops."""
         return mod.envoy_ops.set_annotation(self, op_path, text, title, color, opacity, width, height, x, y)
 
@@ -4903,15 +5282,21 @@ class EnvoyExt:
         """Rename an operator -- see envoy_ops."""
         return mod.envoy_ops.rename_op(self, op_path, new_name)
 
-    def _cook_op(self, op_path: str, force: bool = True,
-                      recurse: bool = False) -> dict:
+    def _cook_op(self, op_path: str, force: bool = True, recurse: bool = False) -> dict:
         """Cook an operator -- see envoy_ops."""
         return mod.envoy_ops.cook_op(self, op_path, force, recurse)
 
-    def _find_children(self, op_path: str, name: str = None, type: str = None,
-                      depth: int = None, tags: list = None,
-                      text: str = None, comment: str = None,
-                      include_utility: bool = False) -> dict:
+    def _find_children(
+        self,
+        op_path: str,
+        name: str = None,
+        type: str = None,
+        depth: int = None,
+        tags: list = None,
+        text: str = None,
+        comment: str = None,
+        include_utility: bool = False,
+    ) -> dict:
         """Search for operators using COMP.findChildren -- see envoy_read."""
         return mod.envoy_read.find_children(self, op_path, name, type, depth, tags, text, comment, include_utility)
 
@@ -4947,18 +5332,40 @@ class EnvoyExt:
 
     # === Extension Creation (Main Thread Only) ===
 
-    def _create_extension(self, parent_path: str, class_name: str,
-                          name: str = None, code: str = None,
-                          promote: bool = True, ext_name: str = None,
-                          ext_index: int = None,
-                          existing_comp: bool = False) -> dict:
+    def _create_extension(
+        self,
+        parent_path: str,
+        class_name: str,
+        name: str = None,
+        code: str = None,
+        promote: bool = True,
+        ext_name: str = None,
+        ext_index: int = None,
+        existing_comp: bool = False,
+    ) -> dict:
         """Create a TD extension: COMP + text DAT + extension wiring -- see envoy_ops."""
-        return mod.envoy_ops.create_extension(self, parent_path, class_name, name, code, promote, ext_name, ext_index, existing_comp)
+        return mod.envoy_ops.create_extension(
+            self,
+            parent_path,
+            class_name,
+            name,
+            code,
+            promote,
+            ext_name,
+            ext_index,
+            existing_comp,
+        )
 
     # === TDN Network Format (Main Thread Only) ===
 
-    def _export_network(self, root_path='/', include_dat_content=True,
-                       output_file=None, max_depth=None, embed_all=False):
+    def _export_network(
+        self,
+        root_path="/",
+        include_dat_content=True,
+        output_file=None,
+        max_depth=None,
+        embed_all=False,
+    ):
         """Delegate to TDN extension for network export -- see envoy_read."""
         return mod.envoy_read.export_network(self, root_path, include_dat_content, output_file, max_depth, embed_all)
 
@@ -4966,16 +5373,13 @@ class EnvoyExt:
         """Delegate to TDN extension for network import -- see envoy_ops."""
         return mod.envoy_ops.import_network(self, target_path, tdn, clear_first)
 
-    def _read_tdn(self, comp_path='/', include_dat_content=None,
-                  max_depth=None, embed_all=False):
+    def _read_tdn(self, comp_path="/", include_dat_content=None, max_depth=None, embed_all=False):
         """Read a network subtree as a TDN dict (in-memory, no disk write) -- see envoy_read."""
         return mod.envoy_read.read_tdn(self, comp_path, include_dat_content, max_depth, embed_all)
 
-    def _diff_tdn(self, target='', max_changed_ops=200, max_bytes=60000):
+    def _diff_tdn(self, target="", max_changed_ops=200, max_bytes=60000):
         """Show what is UNSAVED in TDN-externalized COMPs vs on-disk .tdn -- see envoy_read."""
         return mod.envoy_read.diff_tdn(self, target, max_changed_ops, max_bytes)
-
-
 
     # === Utility Methods ===
 
@@ -4997,14 +5401,33 @@ class EnvoyExt:
     # omitted so it still prompts. Entries are the tool short-names; the
     # permission strings written are 'mcp__envoy__<name>'.
     READ_ONLY_TOOLS = [
-        'get_td_status', 'get_td_info', 'get_td_classes', 'get_td_class_details',
-        'get_op', 'get_op_errors', 'get_op_flags', 'get_op_position',
-        'get_op_performance', 'get_project_performance', 'get_parameter',
-        'get_connections', 'get_annotations', 'get_network_layout',
-        'get_dat_content', 'get_docs', 'get_module_help', 'get_logs',
-        'get_externalizations', 'get_externalization_status', 'get_sessions',
-        'query_network', 'find_children', 'get_enclosed_ops',
-        'read_tdn', 'diff_tdn', 'capture_top',
+        "get_td_status",
+        "get_td_info",
+        "get_td_classes",
+        "get_td_class_details",
+        "get_op",
+        "get_op_errors",
+        "get_op_flags",
+        "get_op_position",
+        "get_op_performance",
+        "get_project_performance",
+        "get_parameter",
+        "get_connections",
+        "get_annotations",
+        "get_network_layout",
+        "get_dat_content",
+        "get_docs",
+        "get_module_help",
+        "get_logs",
+        "get_externalizations",
+        "get_externalization_status",
+        "get_sessions",
+        "query_network",
+        "find_children",
+        "get_enclosed_ops",
+        "read_tdn",
+        "diff_tdn",
+        "capture_top",
     ]
 
     def _toolPermissionsPosture(self):
@@ -5081,30 +5504,30 @@ class EnvoyExt:
         """Remove stale Envoy temp files from /tmp -- see envoy_setup."""
         return mod.envoy_setup.cleanup_temp_files(self)
 
-    def _maybe_offload_to_file(self, result: dict, label: str,
-                                threshold: int = 50000) -> dict:
+    def _maybe_offload_to_file(self, result: dict, label: str, threshold: int = 50000) -> dict:
         """If the JSON-serialized result exceeds threshold bytes, write it
         to a temp file and return a pointer instead. This prevents MCP
         transport/token-limit issues with very large payloads."""
         import os, uuid
+
         serialized = json.dumps(result)
         if len(serialized) <= threshold:
             return result
-        file_path = os.path.join(tempfile.gettempdir(), f'envoy_{label}_{uuid.uuid4().hex[:8]}.json')
-        with open(file_path, 'w', encoding='utf-8') as f:
+        file_path = os.path.join(tempfile.gettempdir(), f"envoy_{label}_{uuid.uuid4().hex[:8]}.json")
+        with open(file_path, "w", encoding="utf-8") as f:
             f.write(serialized)
         return {
-            'offloaded': True,
-            'file_path': file_path,
-            'size_bytes': len(serialized),
-            'message': f'Response too large ({len(serialized)} bytes). '
-                       f'Full result saved to {file_path}. '
-                       f'Use the Read tool to view the file.',
+            "offloaded": True,
+            "file_path": file_path,
+            "size_bytes": len(serialized),
+            "message": f"Response too large ({len(serialized)} bytes). "
+            f"Full result saved to {file_path}. "
+            f"Use the Read tool to view the file.",
         }
 
-    def _log(self, message: str, level: str = 'INFO'):
+    def _log(self, message: str, level: str = "INFO"):
         """Log a message via Embody's centralized logger."""
         try:
             op.Embody.Log(message, level, _depth=2)
         except Exception:
-            print(f'[Envoy][{level}] {message}')
+            print(f"[Envoy][{level}] {message}")

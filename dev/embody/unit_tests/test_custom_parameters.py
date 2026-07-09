@@ -9,11 +9,11 @@ TDN page controls, Logs toggles, and Envoy state verification.
 import os
 from pathlib import Path
 
-runner_mod = op.unit_tests.op('TestRunnerExt').module
+runner_mod = op.unit_tests.op("TestRunnerExt").module
 EmbodyTestCase = runner_mod.EmbodyTestCase
 
-class TestCustomParameters(EmbodyTestCase):
 
+class TestCustomParameters(EmbodyTestCase):
     # DESTRUCTIVE: this suite calls Disable(removeTags=True) and
     # _externalize_project_silent() against ext.root -- the ENTIRE LIVE PROJECT.
     # That unlinks every tracked file project-wide and re-tags every COMP, which
@@ -41,7 +41,7 @@ class TestCustomParameters(EmbodyTestCase):
 
     def tearDown(self):
         """Restore modified parameters with parexec disabled."""
-        parexec = self.embody.op('parexec')
+        parexec = self.embody.op("parexec")
         was_active = parexec.par.active.eval()
         parexec.par.active = False
         for par_name in self._modified_pars:
@@ -75,12 +75,12 @@ class TestCustomParameters(EmbodyTestCase):
 
     def _get_logs_since(self, since_id):
         """Get log entries added after the given ID."""
-        return [e for e in self.embody_ext._log_buffer if e['id'] > since_id]
+        return [e for e in self.embody_ext._log_buffer if e["id"] > since_id]
 
     def _has_log_message(self, since_id, substring):
         """Check if any log entry since the given ID contains the substring."""
         for entry in self._get_logs_since(since_id):
-            if substring in entry.get('message', ''):
+            if substring in entry.get("message", ""):
                 return True
         return False
 
@@ -94,11 +94,10 @@ class TestCustomParameters(EmbodyTestCase):
 
         # Find system COMPs to exclude (palette clones)
         sys_comps = root.findChildren(
-            type=COMP, parName='clone',
-            key=lambda x: any(
-                s in (str(x.par.clone.expr) or '')
-                for s in ['TDTox', 'TDBasicWidgets']
-            ))
+            type=COMP,
+            parName="clone",
+            key=lambda x: any(s in (str(x.par.clone.expr) or "") for s in ["TDTox", "TDBasicWidgets"]),
+        )
         paths_to_exclude = set()
         for sys_comp in sys_comps:
             paths_to_exclude.add(sys_comp.path)
@@ -106,7 +105,7 @@ class TestCustomParameters(EmbodyTestCase):
                 paths_to_exclude.add(desc.path)
 
         # Tag eligible DATs
-        for oper in root.findChildren(type=DAT, parName='file'):
+        for oper in root.findChildren(type=DAT, parName="file"):
             if ext._shouldSkipOp(oper, paths_to_exclude):
                 continue
             if oper.type in ext.supported_dat_types:
@@ -122,7 +121,7 @@ class TestCustomParameters(EmbodyTestCase):
                 ext.applyTagToOperator(oper, comp_tag)
         else:
             comp_tag = ext.my.par.Toxtag.val
-            for oper in root.findChildren(type=COMP, parName='externaltox'):
+            for oper in root.findChildren(type=COMP, parName="externaltox"):
                 if ext._shouldSkipOp(oper, paths_to_exclude):
                     continue
                 ext.applyTagToOperator(oper, comp_tag)
@@ -142,9 +141,9 @@ class TestCustomParameters(EmbodyTestCase):
         self.assertTrue(table.valid)
         # Check expected columns exist
         headers = [table[0, c].val for c in range(table.numCols)]
-        self.assertIn('path', headers)
-        self.assertIn('rel_file_path', headers)
-        self.assertIn('type', headers)
+        self.assertIn("path", headers)
+        self.assertIn("rel_file_path", headers)
+        self.assertIn("type", headers)
 
     def test_folder_is_string_and_getProjectFolder_works(self):
         """Verify Folder is a string and getProjectFolder constructs an absolute path."""
@@ -160,7 +159,7 @@ class TestCustomParameters(EmbodyTestCase):
         """Call UpdateHandler, verify Status is Enabled."""
         # Status should already be Enabled, but let's confirm UpdateHandler maintains it
         self.embody_ext.UpdateHandler()
-        self.assertEqual(self.embody.par.Status.eval(), 'Enabled')
+        self.assertEqual(self.embody.par.Status.eval(), "Enabled")
 
     def test_update_creates_externalization_folder(self):
         """After UpdateHandler, externalization folder exists on disk."""
@@ -177,12 +176,12 @@ class TestCustomParameters(EmbodyTestCase):
             tags_before[oper.path] = set(oper.tags)
 
         # Disable parexec to prevent callback cascades
-        parexec = self.embody.op('parexec')
+        parexec = self.embody.op("parexec")
         parexec.par.active = False
 
         try:
             self.embody_ext.Disable(removeTags=False)
-            self.assertEqual(self.embody.par.Status.eval(), 'Disabled')
+            self.assertEqual(self.embody.par.Status.eval(), "Disabled")
 
             # Tags should be preserved
             for path, tags in tags_before.items():
@@ -193,7 +192,7 @@ class TestCustomParameters(EmbodyTestCase):
 
             # Re-enable
             self.embody_ext.UpdateHandler()
-            self.assertEqual(self.embody.par.Status.eval(), 'Enabled')
+            self.assertEqual(self.embody.par.Status.eval(), "Enabled")
             self.embody_ext.Update()
         finally:
             parexec.par.active = True
@@ -202,15 +201,15 @@ class TestCustomParameters(EmbodyTestCase):
         """Call Disable(removeTags=True), verify tags removed, then re-enable and restore."""
         tags = self.embody_ext.getTags()
         # Create a test comp in sandbox and tag it
-        test_comp = self.sandbox.create(baseCOMP, 'disable_test')
+        test_comp = self.sandbox.create(baseCOMP, "disable_test")
         test_comp.tags.add(tags[0])  # Add first tag
 
-        parexec = self.embody.op('parexec')
+        parexec = self.embody.op("parexec")
         parexec.par.active = False
 
         try:
             self.embody_ext.Disable(removeTags=True)
-            self.assertEqual(self.embody.par.Status.eval(), 'Disabled')
+            self.assertEqual(self.embody.par.Status.eval(), "Disabled")
 
             # Tags should be removed from ops
             # (sandbox comp will be destroyed in tearDown anyway)
@@ -220,14 +219,14 @@ class TestCustomParameters(EmbodyTestCase):
 
             # Re-enable
             self.embody_ext.UpdateHandler()
-            self.assertEqual(self.embody.par.Status.eval(), 'Enabled')
+            self.assertEqual(self.embody.par.Status.eval(), "Enabled")
             self.embody_ext.Update()
         finally:
             parexec.par.active = True
 
     def test_disable_z01_restore_tox(self):
         """After disable tests: Externalize full project (TOX mode), verify TOXes."""
-        parexec = self.embody.op('parexec')
+        parexec = self.embody.op("parexec")
         parexec.par.active = False
         try:
             self._externalize_project_silent(use_tdn=False)
@@ -236,29 +235,31 @@ class TestCustomParameters(EmbodyTestCase):
 
         # Verify table is populated
         table = self.embody_ext.Externalizations
-        self.assertGreater(table.numRows, 1,
-                           'Externalizations table should have rows after TOX externalization')
+        self.assertGreater(
+            table.numRows,
+            1,
+            "Externalizations table should have rows after TOX externalization",
+        )
 
         # Verify TOX files exist for tagged COMPs
         ext_folder = self.embody_ext.getProjectFolder()
         tox_count = 0
         for i in range(1, table.numRows):
-            strategy = table[i, 'strategy'].val if 'strategy' in [table[0, c].val for c in range(table.numCols)] else ''
-            rel_path = table[i, 'rel_file_path'].val
-            if rel_path.endswith('.tox'):
+            strategy = table[i, "strategy"].val if "strategy" in [table[0, c].val for c in range(table.numCols)] else ""
+            rel_path = table[i, "rel_file_path"].val
+            if rel_path.endswith(".tox"):
                 full_path = os.path.join(ext_folder, rel_path)
-                self.assertTrue(os.path.isfile(full_path),
-                                f'TOX file should exist: {rel_path}')
+                self.assertTrue(os.path.isfile(full_path), f"TOX file should exist: {rel_path}")
                 tox_count += 1
-        self.assertGreater(tox_count, 0, 'Should have at least one TOX file')
+        self.assertGreater(tox_count, 0, "Should have at least one TOX file")
 
     def test_disable_z02_disable_again(self):
         """Disable with removeTags=True again after TOX restore."""
-        parexec = self.embody.op('parexec')
+        parexec = self.embody.op("parexec")
         parexec.par.active = False
         try:
             self.embody_ext.Disable(removeTags=True)
-            self.assertEqual(self.embody.par.Status.eval(), 'Disabled')
+            self.assertEqual(self.embody.par.Status.eval(), "Disabled")
         finally:
             parexec.par.active = True
 
@@ -269,7 +270,7 @@ class TestCustomParameters(EmbodyTestCase):
         are verified in z04, which runs one frame later after deferred Updates
         (TDN exports and DAT additions) have had time to settle.
         """
-        parexec = self.embody.op('parexec')
+        parexec = self.embody.op("parexec")
         parexec.par.active = False
         try:
             self._externalize_project_silent(use_tdn=True)
@@ -280,8 +281,11 @@ class TestCustomParameters(EmbodyTestCase):
         # so we only assert the table is non-empty here. Full file/count checks
         # happen in z04 (next frame).
         table = self.embody_ext.Externalizations
-        self.assertGreater(table.numRows, 1,
-                           'Externalizations table should have rows after TDN externalization')
+        self.assertGreater(
+            table.numRows,
+            1,
+            "Externalizations table should have rows after TDN externalization",
+        )
 
     def test_disable_z04_verify_complete(self):
         """Final verification: all operators, files, TDN/py counts are intact.
@@ -298,49 +302,55 @@ class TestCustomParameters(EmbodyTestCase):
         tdn_count = 0
         py_count = 0
         for i in range(1, table.numRows):
-            op_path = table[i, 'path'].val
-            rel_path = table[i, 'rel_file_path'].val
+            op_path = table[i, "path"].val
+            rel_path = table[i, "rel_file_path"].val
             full_path = os.path.join(ext_folder, rel_path)
 
             if not op(op_path):
                 missing_ops.append(op_path)
             if not os.path.isfile(full_path):
                 missing_files.append(rel_path)
-            if rel_path.endswith('.tdn'):
+            if rel_path.endswith(".tdn"):
                 tdn_count += 1
-            elif rel_path.endswith('.py'):
+            elif rel_path.endswith(".py"):
                 py_count += 1
 
-        self.assertEqual(len(missing_ops), 0,
-                         f'All operators should exist: missing {missing_ops[:5]}')
-        self.assertEqual(len(missing_files), 0,
-                         f'All files should exist: missing {missing_files[:5]}')
-        self.assertGreater(tdn_count, 0, 'Should have at least one TDN file')
-        self.assertGreater(py_count, 0, 'Should have at least one .py file')
+        self.assertEqual(
+            len(missing_ops),
+            0,
+            f"All operators should exist: missing {missing_ops[:5]}",
+        )
+        self.assertEqual(
+            len(missing_files),
+            0,
+            f"All files should exist: missing {missing_files[:5]}",
+        )
+        self.assertGreater(tdn_count, 0, "Should have at least one TDN file")
+        self.assertGreater(py_count, 0, "Should have at least one .py file")
 
         # Verify Embody is fully operational
-        self.assertEqual(self.embody.par.Status.eval(), 'Enabled')
+        self.assertEqual(self.embody.par.Status.eval(), "Enabled")
 
     def test_refresh_cleans_and_updates(self):
         """Call Refresh, verify no errors and list comp is valid."""
         log_id = self._get_log_id()
         self.embody_ext.Refresh()
         # Verify list comp is still valid
-        list_comp = self.embody.op('list/list1')
+        list_comp = self.embody.op("list/list1")
         self.assertTrue(list_comp.valid)
         # No ERROR-level logs from Refresh
         for entry in self._get_logs_since(log_id):
-            if entry['level'] == 'ERROR':
+            if entry["level"] == "ERROR":
                 # Allow timeline pause warning
-                if 'TIMELINE' not in entry['message']:
+                if "TIMELINE" not in entry["message"]:
                     self.assertTrue(False, f"Unexpected error during Refresh: {entry['message']}")
 
     def test_detectduplicatepaths_toggle(self):
         """Toggle Detectduplicatepaths off and on, verify value changes."""
         original = self.embody.par.Detectduplicatepaths.eval()
-        self._set_and_track('Detectduplicatepaths', 0)
+        self._set_and_track("Detectduplicatepaths", 0)
         self.assertFalse(self.embody.par.Detectduplicatepaths.eval())
-        self._set_and_track('Detectduplicatepaths', 1)
+        self._set_and_track("Detectduplicatepaths", 1)
         self.assertTrue(self.embody.par.Detectduplicatepaths.eval())
 
     # ==================================================================
@@ -352,50 +362,53 @@ class TestCustomParameters(EmbodyTestCase):
         log_id = self._get_log_id()
         original = self.embody.par.Embeddatsintdns.eval()
         new_val = 0 if original else 1
-        self._set_and_track('Embeddatsintdns', new_val)
+        self._set_and_track("Embeddatsintdns", new_val)
         # parexec fires async at end-of-frame; call directly to test synchronously
         self.embody.ext.TDN.ReexportAllTDNs()
         # Check logs for reexport message
-        has_reexport = self._has_log_message(log_id, 'Re-exporting')
-        has_no_tdn = self._has_log_message(log_id, 'No TDN exports')
-        self.assertTrue(has_reexport or has_no_tdn,
-                        'Expected reexport log message after toggling Embeddatsintdns')
+        has_reexport = self._has_log_message(log_id, "Re-exporting")
+        has_no_tdn = self._has_log_message(log_id, "No TDN exports")
+        self.assertTrue(
+            has_reexport or has_no_tdn,
+            "Expected reexport log message after toggling Embeddatsintdns",
+        )
 
     def test_tdncreateonstart_toggle(self):
         """Toggle Tdncreateonstart off and on."""
         original = self.embody.par.Tdncreateonstart.eval()
         new_val = 0 if original else 1
-        self._set_and_track('Tdncreateonstart', new_val)
+        self._set_and_track("Tdncreateonstart", new_val)
         expected = bool(new_val)
         self.assertEqual(bool(self.embody.par.Tdncreateonstart.eval()), expected)
 
     def test_tdnfile_accepts_path(self):
         """Set Tdnfile to a path, verify accepted."""
-        self._set_and_track('Tdnfile', '/tmp/test_file.tdn')
-        self.assertEqual(self.embody.par.Tdnfile.eval(), '/tmp/test_file.tdn')
+        self._set_and_track("Tdnfile", "/tmp/test_file.tdn")
+        self.assertEqual(self.embody.par.Tdnfile.eval(), "/tmp/test_file.tdn")
 
     def test_networkpath_accepts_path(self):
         """Set Networkpath to a path, verify accepted."""
-        self._set_and_track('Networkpath', '/project1/test_comp')
-        self.assertEqual(self.embody.par.Networkpath.val, '/project1/test_comp')
+        self._set_and_track("Networkpath", "/project1/test_comp")
+        self.assertEqual(self.embody.par.Networkpath.val, "/project1/test_comp")
 
     def test_importtdn_with_invalid_file_logs_error(self):
         """Import with nonexistent file returns error without crashing."""
-        parexec = self.embody.op('parexec')
+        parexec = self.embody.op("parexec")
         parexec.par.active = False
         try:
-            self._set_and_track('Tdnfile', '/nonexistent/path/fake.tdn')
-            self._set_and_track('Networkpath', self.sandbox.path)
+            self._set_and_track("Tdnfile", "/nonexistent/path/fake.tdn")
+            self._set_and_track("Networkpath", self.sandbox.path)
         finally:
             parexec.par.active = True
 
         # Directly call ImportNetworkFromFile
-        result = self.embody.ext.TDN.ImportNetworkFromFile(
-            '/nonexistent/path/fake.tdn', self.sandbox.path)
+        result = self.embody.ext.TDN.ImportNetworkFromFile("/nonexistent/path/fake.tdn", self.sandbox.path)
         # Should return an error dict, not crash
-        self.assertIsNotNone(result, 'ImportNetworkFromFile should return a result')
-        self.assertTrue(bool(result.get('error')),
-                        'Expected error in result for nonexistent TDN file')
+        self.assertIsNotNone(result, "ImportNetworkFromFile should return a result")
+        self.assertTrue(
+            bool(result.get("error")),
+            "Expected error in result for nonexistent TDN file",
+        )
 
     # ==================================================================
     # C. ENVOY PAGE (state verification only)
@@ -408,10 +421,9 @@ class TestCustomParameters(EmbodyTestCase):
             # Skip if server is in a transitional state (port conflicts,
             # startup, or post-reinit restart -- 'Restarting after reinit...'
             # is reported by the resilience layer until bind is reconfirmed).
-            if any(s in status for s in ('Waiting', 'Starting', 'Stopping',
-                                         'Restarting', 'reinit')):
-                self.skip(f'Server in transitional state: {status}')
-            self.assertIn('Running', status)
+            if any(s in status for s in ("Waiting", "Starting", "Stopping", "Restarting", "reinit")):
+                self.skip(f"Server in transitional state: {status}")
+            self.assertIn("Running", status)
         else:
             # Server not running - just verify the par exists
             self.assertIsNotNone(self.embody.par.Envoystatus.eval())
@@ -430,35 +442,41 @@ class TestCustomParameters(EmbodyTestCase):
         """Verbose controls whether DEBUG messages go to FIFO."""
         fifo = self.embody_ext._fifo
         if not fifo:
-            self.skip('FIFO DAT not available')
+            self.skip("FIFO DAT not available")
 
         # With Verbose OFF, Debug should NOT go to FIFO
-        parexec = self.embody.op('parexec')
+        parexec = self.embody.op("parexec")
         parexec.par.active = False
-        self._set_and_track('Verbose', 0)
+        self._set_and_track("Verbose", 0)
         parexec.par.active = True
-        self.embody_ext.Debug('test_verbose_off_message')
+        self.embody_ext.Debug("test_verbose_off_message")
 
         # With Verbose ON, Debug SHOULD go to FIFO
         parexec.par.active = False
-        self._set_and_track('Verbose', 1)
+        self._set_and_track("Verbose", 1)
         parexec.par.active = True
-        self.embody_ext.Debug('test_verbose_on_message')
+        self.embody_ext.Debug("test_verbose_on_message")
 
         # Check FIFO content (row count is unreliable when FIFO is at capacity)
         fifo_text = fifo.text
-        self.assertNotIn('test_verbose_off_message', fifo_text,
-                         'Debug message should NOT go to FIFO when Verbose is OFF')
-        self.assertIn('test_verbose_on_message', fifo_text,
-                      'Debug message SHOULD go to FIFO when Verbose is ON')
+        self.assertNotIn(
+            "test_verbose_off_message",
+            fifo_text,
+            "Debug message should NOT go to FIFO when Verbose is OFF",
+        )
+        self.assertIn(
+            "test_verbose_on_message",
+            fifo_text,
+            "Debug message SHOULD go to FIFO when Verbose is ON",
+        )
 
     def test_print_toggle(self):
         """Toggle Print parameter, verify value changes."""
         original = self.embody.par.Print.eval()
         new_val = 0 if original else 1
-        parexec = self.embody.op('parexec')
+        parexec = self.embody.op("parexec")
         parexec.par.active = False
-        self._set_and_track('Print', new_val)
+        self._set_and_track("Print", new_val)
         parexec.par.active = True
         self.assertEqual(bool(self.embody.par.Print.eval()), bool(new_val))
 
@@ -466,27 +484,27 @@ class TestCustomParameters(EmbodyTestCase):
         """Toggle Logtofile parameter, verify value changes."""
         original = self.embody.par.Logtofile.eval()
         new_val = 0 if original else 1
-        parexec = self.embody.op('parexec')
+        parexec = self.embody.op("parexec")
         parexec.par.active = False
-        self._set_and_track('Logtofile', new_val)
+        self._set_and_track("Logtofile", new_val)
         parexec.par.active = True
         self.assertEqual(bool(self.embody.par.Logtofile.eval()), bool(new_val))
 
     def test_logfolder_default(self):
         """Verify Logfolder defaults to 'logs'."""
-        self.assertEqual(self.embody.par.Logfolder.eval(), 'logs')
+        self.assertEqual(self.embody.par.Logfolder.eval(), "logs")
 
     def test_logfolder_change_affects_log_path(self):
         """Changing Logfolder changes where log files are written."""
-        parexec = self.embody.op('parexec')
+        parexec = self.embody.op("parexec")
         parexec.par.active = False
-        self._set_and_track('Logfolder', '_test_logs_temp')
+        self._set_and_track("Logfolder", "_test_logs_temp")
         parexec.par.active = True
         log_path = self.embody_ext._get_log_file_path()
         if log_path:
-            self.assertIn('_test_logs_temp', str(log_path))
+            self.assertIn("_test_logs_temp", str(log_path))
         # Clean up created directory
-        temp_dir = Path('_test_logs_temp')
+        temp_dir = Path("_test_logs_temp")
         if temp_dir.is_dir():
             try:
                 temp_dir.rmdir()
@@ -497,9 +515,9 @@ class TestCustomParameters(EmbodyTestCase):
         """Toggle Enablekeyboardshortcuts, verify value changes."""
         original = self.embody.par.Enablekeyboardshortcuts.eval()
         new_val = 0 if original else 1
-        parexec = self.embody.op('parexec')
+        parexec = self.embody.op("parexec")
         parexec.par.active = False
-        self._set_and_track('Enablekeyboardshortcuts', new_val)
+        self._set_and_track("Enablekeyboardshortcuts", new_val)
         parexec.par.active = True
         self.assertEqual(bool(self.embody.par.Enablekeyboardshortcuts.eval()), bool(new_val))
 
@@ -518,39 +536,37 @@ class TestCustomParameters(EmbodyTestCase):
         self.__class__._folder_had_rows = table.numRows > 1 if table else False
 
         # Disable parexec to prevent callback cascade + delayed run() scheduling
-        parexec = self.embody.op('parexec')
+        parexec = self.embody.op("parexec")
         parexec.par.active = False
 
         try:
             prev = self.embody.par.Folder.eval()
-            self.embody.par.Folder.val = '_test_pars_temp'
+            self.embody.par.Folder.val = "_test_pars_temp"
         finally:
             parexec.par.active = True
 
         # Manually call Disable (same as what parexec.onValueChange does)
         self.embody_ext.Disable(prev, removeTags=False)
-        self.assertEqual(self.embody.par.Status.eval(), 'Disabled')
+        self.assertEqual(self.embody.par.Status.eval(), "Disabled")
 
     def test_zz_folder_02_reenable_new(self):
         """Step 2: Call UpdateHandler, verify Enabled and new folder exists."""
         self.embody_ext.UpdateHandler()
-        self.assertEqual(self.embody.par.Status.eval(), 'Enabled')
+        self.assertEqual(self.embody.par.Status.eval(), "Enabled")
 
         new_folder = self.embody_ext.getProjectFolder()
-        self.assertTrue(os.path.isdir(new_folder),
-                        f'New folder should exist: {new_folder}')
+        self.assertTrue(os.path.isdir(new_folder), f"New folder should exist: {new_folder}")
 
     def test_zz_folder_03_update_new_folder(self):
         """Step 3: Run Update, verify table has rows in new folder."""
         self.embody_ext.Update()
         table = self.embody_ext.Externalizations
         if self.__class__._folder_had_rows:
-            self.assertGreater(table.numRows, 1,
-                               'Externalizations table should have rows after Update')
+            self.assertGreater(table.numRows, 1, "Externalizations table should have rows after Update")
 
     def test_zz_folder_04_restore_original(self):
         """Step 4: Change Folder back to original, call Disable, verify Disabled."""
-        parexec = self.embody.op('parexec')
+        parexec = self.embody.op("parexec")
         parexec.par.active = False
 
         try:
@@ -561,27 +577,29 @@ class TestCustomParameters(EmbodyTestCase):
 
         # Disable with the temp folder as "previous"
         self.embody_ext.Disable(prev, removeTags=False)
-        self.assertEqual(self.embody.par.Status.eval(), 'Disabled')
+        self.assertEqual(self.embody.par.Status.eval(), "Disabled")
 
     def test_zz_folder_05_reenable_original(self):
         """Step 5: Re-enable with original folder, verify operational."""
         self.embody_ext.UpdateHandler()
-        self.assertEqual(self.embody.par.Status.eval(), 'Enabled')
+        self.assertEqual(self.embody.par.Status.eval(), "Enabled")
         self.embody_ext.Update()
 
         # Verify original folder exists
         folder = self.embody_ext.getProjectFolder()
-        self.assertTrue(os.path.isdir(folder),
-                        f'Original folder should exist: {folder}')
+        self.assertTrue(os.path.isdir(folder), f"Original folder should exist: {folder}")
 
         # Verify table has rows
         table = self.embody_ext.Externalizations
         if self.__class__._folder_had_rows:
-            self.assertGreater(table.numRows, 1,
-                               'Table should have rows after restoring original folder')
+            self.assertGreater(
+                table.numRows,
+                1,
+                "Table should have rows after restoring original folder",
+            )
 
         # Clean up temp folder if empty
-        temp_folder = Path(project.folder) / '_test_pars_temp'
+        temp_folder = Path(project.folder) / "_test_pars_temp"
         if temp_folder.is_dir():
             try:
                 temp_folder.rmdir()
@@ -600,18 +618,18 @@ class TestCustomParameters(EmbodyTestCase):
         empty, which walked the entire project tree and removed the
         newly-created target directory.
         """
-        parexec = self.embody.op('parexec')
+        parexec = self.embody.op("parexec")
         parexec.par.active = False
 
         # Save original state
         original_folder = self.embody.par.Folder.eval()
-        target_name = '_test_issue3_target'
+        target_name = "_test_issue3_target"
         target_dir = Path(project.folder) / target_name
 
         try:
             # Create the new empty directory (simulates user creating it)
             target_dir.mkdir(exist_ok=True)
-            self.assertTrue(target_dir.is_dir(), 'Target dir should exist')
+            self.assertTrue(target_dir.is_dir(), "Target dir should exist")
 
             # Simulate folder change: Disable with prev='', then switch
             prev = self.embody.par.Folder.eval()
@@ -619,19 +637,23 @@ class TestCustomParameters(EmbodyTestCase):
 
             # Disable with the old folder (reproduces the parexec flow)
             self.embody_ext.Disable(prev, removeTags=False)
-            self.assertEqual(self.embody.par.Status.eval(), 'Disabled')
+            self.assertEqual(self.embody.par.Status.eval(), "Disabled")
 
             # The target directory must still exist after Disable
-            self.assertTrue(target_dir.is_dir(),
-                            f'Target directory was deleted during Disable: {target_dir}')
+            self.assertTrue(
+                target_dir.is_dir(),
+                f"Target directory was deleted during Disable: {target_dir}",
+            )
 
             # Re-enable - UpdateHandler should create the subfolder
             self.embody_ext.UpdateHandler()
-            self.assertEqual(self.embody.par.Status.eval(), 'Enabled')
+            self.assertEqual(self.embody.par.Status.eval(), "Enabled")
 
             project_folder = self.embody_ext.getProjectFolder()
-            self.assertTrue(os.path.isdir(project_folder),
-                            f'Project folder should exist after UpdateHandler: {project_folder}')
+            self.assertTrue(
+                os.path.isdir(project_folder),
+                f"Project folder should exist after UpdateHandler: {project_folder}",
+            )
 
         finally:
             # Restore original folder
@@ -645,6 +667,7 @@ class TestCustomParameters(EmbodyTestCase):
             if target_dir.is_dir():
                 try:
                     import shutil
+
                     shutil.rmtree(str(target_dir))
                 except Exception:
                     pass
@@ -656,11 +679,11 @@ class TestCustomParameters(EmbodyTestCase):
         The fix ensures deleteEmptyDirectories is never called on
         project.folder, preventing collateral deletion of unrelated dirs.
         """
-        parexec = self.embody.op('parexec')
+        parexec = self.embody.op("parexec")
         parexec.par.active = False
 
         original_folder = self.embody.par.Folder.eval()
-        canary_name = '_test_issue3_canary'
+        canary_name = "_test_issue3_canary"
         canary_dir = Path(project.folder) / canary_name
 
         try:
@@ -668,12 +691,14 @@ class TestCustomParameters(EmbodyTestCase):
             canary_dir.mkdir(exist_ok=True)
 
             # Disable with empty prev - this was the trigger for issue #3
-            self.embody_ext.Disable('', removeTags=False)
-            self.assertEqual(self.embody.par.Status.eval(), 'Disabled')
+            self.embody_ext.Disable("", removeTags=False)
+            self.assertEqual(self.embody.par.Status.eval(), "Disabled")
 
             # The canary directory must survive
-            self.assertTrue(canary_dir.is_dir(),
-                            f'Canary directory was deleted by Disable: {canary_dir}')
+            self.assertTrue(
+                canary_dir.is_dir(),
+                f"Canary directory was deleted by Disable: {canary_dir}",
+            )
 
         finally:
             self.embody.par.Folder.val = original_folder

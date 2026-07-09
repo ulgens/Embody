@@ -1,11 +1,11 @@
 # me - This DAT
-# 
+#
 # dat - The DAT that received the key event
 # key - The name of the key attached to the event.
-#		This tries to be consistent regardless of which language
-#		the keyboard is set to. The values will be the english/ASCII
-#		values that most closely match the key pressed.
-#		This is what should be used for shortcuts instead of 'character'.
+# This tries to be consistent regardless of which language
+# the keyboard is set to. The values will be the english/ASCII
+# values that most closely match the key pressed.
+# This is what should be used for shortcuts instead of 'character'.
 # character - The unicode character generated.
 # alt - True if the alt modifier is pressed
 # ctrl - True if the ctrl modifier is pressed
@@ -15,65 +15,80 @@
 # cmd - True if the cmd modifier is pressed
 
 
+def onKey(
+    dat,
+    key,
+    character,
+    alt,
+    lAlt,
+    rAlt,
+    ctrl,
+    lCtrl,
+    rCtrl,
+    shift,
+    lShift,
+    rShift,
+    state,
+    time,
+    cmd,
+    lCmd,
+    rCmd,
+):
 
+    # Suppress all shortcuts in Perform Mode (belt-and-suspenders -- DAT is also disabled)
+    if parent.Embody.par.Performmode.eval():
+        return
 
-def onKey(dat, key, character, alt, lAlt, rAlt, ctrl, lCtrl, rCtrl, shift, lShift, rShift, state, time, cmd, lCmd, rCmd):
+    # Combine ctrl and cmd for cross-platform compatibility
+    ctrl_or_cmd = ctrl or cmd
 
-	# Suppress all shortcuts in Perform Mode (belt-and-suspenders -- DAT is also disabled)
-	if parent.Embody.par.Performmode.eval():
-		return
+    # view externalizations
+    if state and key == "o" and ctrl_or_cmd and lShift:
+        parent.Embody.Manager("open")
 
-	# Combine ctrl and cmd for cross-platform compatibility
-	ctrl_or_cmd = ctrl or cmd
+    # add tox/dat tag
+    elif state and key == "lctrl":
+        timer = op("timer1")
+        if timer["running"]:
+            run(f"op('{parent.Embody}').TagGetter()", delayFrames=6)
 
-	# view externalizations
-	if state and key == 'o' and ctrl_or_cmd and lShift:
-		parent.Embody.Manager('open')
+        timer.par.active = 1
+        timer.par.start.pulse()
 
-	# add tox/dat tag
-	elif state and key == 'lctrl':
-		timer = op('timer1')
-		if timer['running']:
-			run(f"op('{parent.Embody}').TagGetter()", delayFrames=6)
+    # initialize/update externalizations
+    elif state and key == "u" and ctrl_or_cmd and lShift:
+        parent.Embody.UpdateHandler()
 
-		timer.par.active = 1
-		timer.par.start.pulse()
+    # Refresh tracking state
+    elif state and key == "r" and ctrl_or_cmd and lShift:
+        parent.Embody.Refresh()
 
-	# initialize/update externalizations
-	elif state and key == 'u' and ctrl_or_cmd and lShift:
-		parent.Embody.UpdateHandler()
+    # Update current COMP only
+    elif state and key == "u" and ctrl_or_cmd and alt:
+        parent.Embody.SaveCurrentComp()
 
-	# Refresh tracking state
-	elif state and key == 'r' and ctrl_or_cmd and lShift:
-		parent.Embody.Refresh()
+    # Export project network to .tdn
+    elif state and key == "e" and ctrl_or_cmd and lShift:
+        parent.Embody.ext.TDN.ExportProjectTDNInteractive()
 
-	# Update current COMP only
-	elif state and key == 'u' and ctrl_or_cmd and alt:
-	    parent.Embody.SaveCurrentComp()
+    # Export current COMP to .tdn
+    elif state and key == "e" and ctrl_or_cmd and alt:
+        pane = ui.panes.current
+        if pane and pane.owner:
+            parent.Embody.ext.TDN.ExportNetworkAsync(root_path=pane.owner.path, output_file="auto")
 
-	# Export project network to .tdn
-	elif state and key == 'e' and ctrl_or_cmd and lShift:
-		parent.Embody.ext.TDN.ExportProjectTDNInteractive()
+    # Copy the selected COMP's network to the clipboard as portable TDN
+    # (copy special; PASTE is now an automatic clipboard prompt -- no shortcut,
+    # since TD's native Cmd/Ctrl+V paste can't be suppressed. See TDNExt
+    # _clipboardWatchPoll.)
+    elif state and key == "c" and ctrl_or_cmd and lShift:
+        parent.Embody.ext.TDN.CopySelectedToClipboard()
 
-	# Export current COMP to .tdn
-	elif state and key == 'e' and ctrl_or_cmd and alt:
-		pane = ui.panes.current
-		if pane and pane.owner:
-			parent.Embody.ext.TDN.ExportNetworkAsync(
-				root_path=pane.owner.path, output_file='auto')
+    return
 
-	# Copy the selected COMP's network to the clipboard as portable TDN
-	# (copy special; PASTE is now an automatic clipboard prompt -- no shortcut,
-	# since TD's native Cmd/Ctrl+V paste can't be suppressed. See TDNExt
-	# _clipboardWatchPoll.)
-	elif state and key == 'c' and ctrl_or_cmd and lShift:
-		parent.Embody.ext.TDN.CopySelectedToClipboard()
-
-
-	return
 
 # shortcutName is the name of the shortcut
 
+
 def onShortcut(dat, shortcutName, time):
-	return;
-	
+    return

@@ -12,7 +12,7 @@ Tests the main-thread side of the dual-thread architecture:
 
 from queue import Queue
 
-runner_mod = op.unit_tests.op('TestRunnerExt').module
+runner_mod = op.unit_tests.op("TestRunnerExt").module
 EmbodyTestCase = runner_mod.EmbodyTestCase
 
 
@@ -28,22 +28,19 @@ class _IsolatedQueuesMixin:
     """
 
     def _isolateQueues(self):
-        self._live_queues = (self.envoy.request_queue,
-                             self.envoy.response_queue)
+        self._live_queues = (self.envoy.request_queue, self.envoy.response_queue)
         self.envoy.request_queue = Queue()
         self.envoy.response_queue = Queue()
 
     def _restoreQueues(self):
         priv_rq = self.envoy.request_queue
-        self.envoy.request_queue, self.envoy.response_queue = \
-            self._live_queues
+        self.envoy.request_queue, self.envoy.response_queue = self._live_queues
         # Forward any REAL request that raced into the private queue during
         # the swap (real payloads carry 'sid'; this file's fakes never do).
         try:
             while not priv_rq.empty():
                 item = priv_rq.get_nowait()
-                if isinstance(item, dict) and 'operation' in item \
-                        and 'sid' in item:
+                if isinstance(item, dict) and "operation" in item and "sid" in item:
                     self.envoy.request_queue.put(item)
         except Exception:
             pass
@@ -67,18 +64,13 @@ class TestOnRefreshProcessing(_IsolatedQueuesMixin, EmbodyTestCase):
         while not self.envoy.response_queue.empty():
             self.envoy.response_queue.get_nowait()
 
-        self.envoy.request_queue.put({
-            'id': 9001,
-            'operation': 'get_td_info',
-            'params': {}
-        })
+        self.envoy.request_queue.put({"id": 9001, "operation": "get_td_info", "params": {}})
         self.envoy._onRefresh()
 
-        self.assertFalse(self.envoy.response_queue.empty(),
-                         'Response should be in queue')
+        self.assertFalse(self.envoy.response_queue.empty(), "Response should be in queue")
         resp = self.envoy.response_queue.get_nowait()
-        self.assertEqual(resp['id'], 9001)
-        self.assertDictHasKey(resp['result'], 'version')
+        self.assertEqual(resp["id"], 9001)
+        self.assertDictHasKey(resp["result"], "version")
 
     def test_processes_multiple_requests_in_one_frame(self):
         """Multiple queued requests are processed in a single _onRefresh call."""
@@ -86,11 +78,7 @@ class TestOnRefreshProcessing(_IsolatedQueuesMixin, EmbodyTestCase):
             self.envoy.response_queue.get_nowait()
 
         for i in range(3):
-            self.envoy.request_queue.put({
-                'id': 8000 + i,
-                'operation': 'get_td_info',
-                'params': {}
-            })
+            self.envoy.request_queue.put({"id": 8000 + i, "operation": "get_td_info", "params": {}})
 
         self.envoy._onRefresh()
 
@@ -106,11 +94,7 @@ class TestOnRefreshProcessing(_IsolatedQueuesMixin, EmbodyTestCase):
 
         # Queue 8 requests
         for i in range(8):
-            self.envoy.request_queue.put({
-                'id': 7000 + i,
-                'operation': 'get_td_info',
-                'params': {}
-            })
+            self.envoy.request_queue.put({"id": 7000 + i, "operation": "get_td_info", "params": {}})
 
         self.envoy._onRefresh()
 
@@ -133,11 +117,7 @@ class TestOnRefreshProcessing(_IsolatedQueuesMixin, EmbodyTestCase):
             self.envoy.response_queue.get_nowait()
 
         for i in range(7):
-            self.envoy.request_queue.put({
-                'id': 6000 + i,
-                'operation': 'get_td_info',
-                'params': {}
-            })
+            self.envoy.request_queue.put({"id": 6000 + i, "operation": "get_td_info", "params": {}})
 
         self.envoy._onRefresh()  # Processes 5
         self.envoy._onRefresh()  # Processes remaining 2
@@ -164,15 +144,11 @@ class TestOnRefreshProcessing(_IsolatedQueuesMixin, EmbodyTestCase):
             self.envoy.response_queue.get_nowait()
 
         # Invalid: not a dict
-        self.envoy.request_queue.put('garbage')
+        self.envoy.request_queue.put("garbage")
         # Invalid: dict without 'operation'
-        self.envoy.request_queue.put({'id': 1, 'params': {}})
+        self.envoy.request_queue.put({"id": 1, "params": {}})
         # Valid
-        self.envoy.request_queue.put({
-            'id': 5001,
-            'operation': 'get_td_info',
-            'params': {}
-        })
+        self.envoy.request_queue.put({"id": 5001, "operation": "get_td_info", "params": {}})
 
         self.envoy._onRefresh()
 
@@ -181,25 +157,21 @@ class TestOnRefreshProcessing(_IsolatedQueuesMixin, EmbodyTestCase):
         while not self.envoy.response_queue.empty():
             responses.append(self.envoy.response_queue.get_nowait())
         self.assertEqual(len(responses), 1)
-        self.assertEqual(responses[0]['id'], 5001)
+        self.assertEqual(responses[0]["id"], 5001)
 
     def test_unknown_operation_returns_error(self):
         """Unknown operation name produces an error result (not a crash)."""
         while not self.envoy.response_queue.empty():
             self.envoy.response_queue.get_nowait()
 
-        self.envoy.request_queue.put({
-            'id': 4001,
-            'operation': 'nonexistent_op_xyz',
-            'params': {}
-        })
+        self.envoy.request_queue.put({"id": 4001, "operation": "nonexistent_op_xyz", "params": {}})
 
         self.envoy._onRefresh()
 
         resp = self.envoy.response_queue.get_nowait()
-        self.assertEqual(resp['id'], 4001)
-        self.assertDictHasKey(resp['result'], 'error')
-        self.assertIn('Unknown operation', resp['result']['error'])
+        self.assertEqual(resp["id"], 4001)
+        self.assertDictHasKey(resp["result"], "error")
+        self.assertIn("Unknown operation", resp["result"]["error"])
 
     def test_handler_error_returns_error_result(self):
         """Handler that encounters an error returns error dict, not crash."""
@@ -207,32 +179,28 @@ class TestOnRefreshProcessing(_IsolatedQueuesMixin, EmbodyTestCase):
             self.envoy.response_queue.get_nowait()
 
         self.envoy.request_queue.put({
-            'id': 4002,
-            'operation': 'get_op',
-            'params': {'op_path': '/absolutely_nonexistent_test_op'}
+            "id": 4002,
+            "operation": "get_op",
+            "params": {"op_path": "/absolutely_nonexistent_test_op"},
         })
 
         self.envoy._onRefresh()
 
         resp = self.envoy.response_queue.get_nowait()
-        self.assertEqual(resp['id'], 4002)
-        self.assertDictHasKey(resp['result'], 'error')
+        self.assertEqual(resp["id"], 4002)
+        self.assertDictHasKey(resp["result"], "error")
 
     def test_request_id_preserved_in_response(self):
         """The request id is faithfully echoed in the response."""
         while not self.envoy.response_queue.empty():
             self.envoy.response_queue.get_nowait()
 
-        self.envoy.request_queue.put({
-            'id': 12345,
-            'operation': 'get_td_info',
-            'params': {}
-        })
+        self.envoy.request_queue.put({"id": 12345, "operation": "get_td_info", "params": {}})
 
         self.envoy._onRefresh()
 
         resp = self.envoy.response_queue.get_nowait()
-        self.assertEqual(resp['id'], 12345)
+        self.assertEqual(resp["id"], 12345)
 
     def test_params_default_to_empty_dict(self):
         """Request without 'params' key defaults to empty dict."""
@@ -240,17 +208,17 @@ class TestOnRefreshProcessing(_IsolatedQueuesMixin, EmbodyTestCase):
             self.envoy.response_queue.get_nowait()
 
         self.envoy.request_queue.put({
-            'id': 3001,
-            'operation': 'get_td_info',
+            "id": 3001,
+            "operation": "get_td_info",
             # no 'params' key
         })
 
         self.envoy._onRefresh()
 
         resp = self.envoy.response_queue.get_nowait()
-        self.assertEqual(resp['id'], 3001)
+        self.assertEqual(resp["id"], 3001)
         # get_td_info needs no params, so it should succeed
-        self.assertNotIn('error', resp['result'])
+        self.assertNotIn("error", resp["result"])
 
 
 class TestSendResponse(_IsolatedQueuesMixin, EmbodyTestCase):
@@ -267,65 +235,65 @@ class TestSendResponse(_IsolatedQueuesMixin, EmbodyTestCase):
 
     def test_response_in_queue(self):
         """_send_response puts response dict in the queue."""
-        self.envoy._send_response(999, {'data': 'hello'})
+        self.envoy._send_response(999, {"data": "hello"})
         resp = self.envoy.response_queue.get_nowait()
-        self.assertEqual(resp['id'], 999)
-        self.assertEqual(resp['result']['data'], 'hello')
+        self.assertEqual(resp["id"], 999)
+        self.assertEqual(resp["result"]["data"], "hello")
 
     def test_response_preserves_result_contents(self):
         """Complex result dicts are preserved."""
         result = {
-            'operators': [{'name': 'noise1', 'type': 'noiseTOP'}],
-            'count': 1,
+            "operators": [{"name": "noise1", "type": "noiseTOP"}],
+            "count": 1,
         }
         self.envoy._send_response(888, result)
         resp = self.envoy.response_queue.get_nowait()
-        self.assertEqual(resp['result']['count'], 1)
-        self.assertEqual(resp['result']['operators'][0]['name'], 'noise1')
+        self.assertEqual(resp["result"]["count"], 1)
+        self.assertEqual(resp["result"]["operators"][0]["name"], "noise1")
 
     def test_log_piggybacking_adds_logs_key(self):
         """WARNING/ERROR entries logged after a session's cursor baseline ride
         that session's next response. Cursors are PER SESSION (_log_cursors,
         multi-session Phase 2); INFO/DEBUG never ride (token-lean contract)."""
-        sid = 'test-piggyback-sid'
+        sid = "test-piggyback-sid"
         self.envoy._log_cursors.pop(sid, None)
         self.envoy._baselineLogCursor(sid)
-        self.embody.Log('piggyback warning fixture', 'WARNING')
+        self.embody.Log("piggyback warning fixture", "WARNING")
 
-        result = {'data': 'test'}
+        result = {"data": "test"}
         self.envoy._send_response(777, result, sid=sid)
         resp = self.envoy.response_queue.get_nowait()
 
-        self.assertDictHasKey(resp['result'], '_logs')
-        self.assertGreater(len(resp['result']['_logs']), 0)
+        self.assertDictHasKey(resp["result"], "_logs")
+        self.assertGreater(len(resp["result"]["_logs"]), 0)
         self.assertTrue(
-            any('piggyback warning fixture' in e.get('message', '')
-                for e in resp['result']['_logs']),
-            'the fixture WARNING should ride the response')
+            any("piggyback warning fixture" in e.get("message", "") for e in resp["result"]["_logs"]),
+            "the fixture WARNING should ride the response",
+        )
 
     def test_log_piggybacking_updates_last_served_id(self):
         """A response advances the SESSION's log cursor past served entries
         (replaces the retired single shared _last_served_log_id)."""
-        sid = 'test-cursor-sid'
+        sid = "test-cursor-sid"
         self.envoy._log_cursors.pop(sid, None)
         self.envoy._baselineLogCursor(sid)
         before = self.envoy._log_cursors[sid]
-        self.embody.Log('advance cursor fixture', 'WARNING')
+        self.embody.Log("advance cursor fixture", "WARNING")
 
-        self.envoy._send_response(666, {'data': 'x'}, sid=sid)
+        self.envoy._send_response(666, {"data": "x"}, sid=sid)
         self.envoy.response_queue.get_nowait()
 
         self.assertGreater(self.envoy._log_cursors[sid], before)
 
     def test_multiple_responses_ordered(self):
         """Multiple _send_response calls maintain FIFO order."""
-        self.envoy._send_response(1, {'a': 1})
-        self.envoy._send_response(2, {'b': 2})
-        self.envoy._send_response(3, {'c': 3})
+        self.envoy._send_response(1, {"a": 1})
+        self.envoy._send_response(2, {"b": 2})
+        self.envoy._send_response(3, {"c": 3})
 
         ids = []
         while not self.envoy.response_queue.empty():
-            ids.append(self.envoy.response_queue.get_nowait()['id'])
+            ids.append(self.envoy.response_queue.get_nowait()["id"])
         self.assertListEqual(ids, [1, 2, 3])
 
 
@@ -342,71 +310,55 @@ class TestRequestResponseRoundTrip(_IsolatedQueuesMixin, EmbodyTestCase):
         super().tearDown()
 
     def test_round_trip_get_td_info(self):
-        self.envoy.request_queue.put({
-            'id': 100,
-            'operation': 'get_td_info',
-            'params': {}
-        })
+        self.envoy.request_queue.put({"id": 100, "operation": "get_td_info", "params": {}})
         self.envoy._onRefresh()
 
         resp = self.envoy.response_queue.get_nowait()
-        self.assertEqual(resp['id'], 100)
-        self.assertDictHasKey(resp['result'], 'version')
-        self.assertDictHasKey(resp['result'], 'osName')
+        self.assertEqual(resp["id"], 100)
+        self.assertDictHasKey(resp["result"], "version")
+        self.assertDictHasKey(resp["result"], "osName")
 
     def test_round_trip_get_op(self):
-        comp = self.sandbox.create(baseCOMP, 'rt_test')
-        self.envoy.request_queue.put({
-            'id': 101,
-            'operation': 'get_op',
-            'params': {'op_path': comp.path}
-        })
+        comp = self.sandbox.create(baseCOMP, "rt_test")
+        self.envoy.request_queue.put({"id": 101, "operation": "get_op", "params": {"op_path": comp.path}})
         self.envoy._onRefresh()
 
         resp = self.envoy.response_queue.get_nowait()
-        self.assertEqual(resp['id'], 101)
-        self.assertNotIn('error', resp['result'])
-        self.assertEqual(resp['result']['name'], 'rt_test')
+        self.assertEqual(resp["id"], 101)
+        self.assertNotIn("error", resp["result"])
+        self.assertEqual(resp["result"]["name"], "rt_test")
 
     def test_round_trip_query_network(self):
-        self.envoy.request_queue.put({
-            'id': 102,
-            'operation': 'query_network',
-            'params': {'parent_path': '/'}
-        })
+        self.envoy.request_queue.put({"id": 102, "operation": "query_network", "params": {"parent_path": "/"}})
         self.envoy._onRefresh()
 
         resp = self.envoy.response_queue.get_nowait()
-        self.assertEqual(resp['id'], 102)
-        self.assertNotIn('error', resp['result'])
+        self.assertEqual(resp["id"], 102)
+        self.assertNotIn("error", resp["result"])
 
     def test_round_trip_error_propagated(self):
         """Error from handler propagates through the queue cleanly."""
         self.envoy.request_queue.put({
-            'id': 103,
-            'operation': 'get_op',
-            'params': {'op_path': '/this_does_not_exist_rt'}
+            "id": 103,
+            "operation": "get_op",
+            "params": {"op_path": "/this_does_not_exist_rt"},
         })
         self.envoy._onRefresh()
 
         resp = self.envoy.response_queue.get_nowait()
-        self.assertEqual(resp['id'], 103)
-        self.assertDictHasKey(resp['result'], 'error')
+        self.assertEqual(resp["id"], 103)
+        self.assertDictHasKey(resp["result"], "error")
 
     def test_round_trip_multiple_interleaved(self):
         """Multiple requests produce correctly-matched responses."""
-        comp = self.sandbox.create(baseCOMP, 'interleave_test')
+        comp = self.sandbox.create(baseCOMP, "interleave_test")
 
+        self.envoy.request_queue.put({"id": 200, "operation": "get_td_info", "params": {}})
+        self.envoy.request_queue.put({"id": 201, "operation": "get_op", "params": {"op_path": comp.path}})
         self.envoy.request_queue.put({
-            'id': 200, 'operation': 'get_td_info', 'params': {}
-        })
-        self.envoy.request_queue.put({
-            'id': 201, 'operation': 'get_op',
-            'params': {'op_path': comp.path}
-        })
-        self.envoy.request_queue.put({
-            'id': 202, 'operation': 'get_op',
-            'params': {'op_path': '/nonexistent_interleave'}
+            "id": 202,
+            "operation": "get_op",
+            "params": {"op_path": "/nonexistent_interleave"},
         })
 
         self.envoy._onRefresh()
@@ -414,11 +366,11 @@ class TestRequestResponseRoundTrip(_IsolatedQueuesMixin, EmbodyTestCase):
         responses = {}
         while not self.envoy.response_queue.empty():
             r = self.envoy.response_queue.get_nowait()
-            responses[r['id']] = r['result']
+            responses[r["id"]] = r["result"]
 
         # 200: td_info success
-        self.assertDictHasKey(responses[200], 'version')
+        self.assertDictHasKey(responses[200], "version")
         # 201: get_op success
-        self.assertEqual(responses[201]['name'], 'interleave_test')
+        self.assertEqual(responses[201]["name"], "interleave_test")
         # 202: get_op error
-        self.assertDictHasKey(responses[202], 'error')
+        self.assertDictHasKey(responses[202], "error")

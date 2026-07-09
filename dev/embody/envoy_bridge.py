@@ -34,11 +34,11 @@ CRASH_LOOP_WINDOW_S = 300  # 5 minutes
 CRASH_LOOP_MAX = 3  # Max launches within the window
 
 # Reconciler tick intervals.
-CONFIG_TICK_S = 1                 # envoy.json mtime polling
-HEARTBEAT_TICK_S = 10             # backend HTTP ping (fixed cadence)
-TOOL_CACHE_TTL_S = 5         # How long a cached tool list counts as fresh
-BACKEND_PING_TIMEOUT_S = 2   # Per-ping timeout
-FETCH_TOOLS_TIMEOUT_S = 3    # One-shot tools/list forward timeout
+CONFIG_TICK_S = 1  # envoy.json mtime polling
+HEARTBEAT_TICK_S = 10  # backend HTTP ping (fixed cadence)
+TOOL_CACHE_TTL_S = 5  # How long a cached tool list counts as fresh
+BACKEND_PING_TIMEOUT_S = 2  # Per-ping timeout
+FETCH_TOOLS_TIMEOUT_S = 3  # One-shot tools/list forward timeout
 
 
 # ---------------------------------------------------------------------------
@@ -71,10 +71,7 @@ BRIDGE_TOOLS = [
             "properties": {
                 "timeout": {
                     "type": "integer",
-                    "description": (
-                        "Max seconds to wait for Envoy to become reachable "
-                        "after launch (default: 120)"
-                    ),
+                    "description": ("Max seconds to wait for Envoy to become reachable after launch (default: 120)"),
                     "default": 120,
                 },
                 "project_path": {
@@ -101,10 +98,7 @@ BRIDGE_TOOLS = [
             "properties": {
                 "timeout": {
                     "type": "integer",
-                    "description": (
-                        "Max seconds to wait for Envoy to become reachable "
-                        "after relaunch (default: 120)"
-                    ),
+                    "description": ("Max seconds to wait for Envoy to become reachable after relaunch (default: 120)"),
                     "default": 120,
                 },
                 "project_path": {
@@ -133,8 +127,7 @@ BRIDGE_TOOLS = [
                 "instance": {
                     "type": "string",
                     "description": (
-                        "Instance name to switch to (toe basename without "
-                        ".toe extension). Omit to list all instances."
+                        "Instance name to switch to (toe basename without .toe extension). Omit to list all instances."
                     ),
                 },
             },
@@ -166,8 +159,7 @@ class BridgeState:
     flags, PID tracking, tool cache, and launch timestamps.
     """
 
-    def __init__(self, *, url, td_pid=None, config=None,
-                 config_path=None, active_name=None):
+    def __init__(self, *, url, td_pid=None, config=None, config_path=None, active_name=None):
         self._lock = threading.RLock()
         # Connection state
         self.connected = False
@@ -266,8 +258,7 @@ def _init_session_label(config_path):
         else:
             if config_path:
                 # Config is in .embody/ - git root is one level up
-                git_root = os.path.dirname(
-                    os.path.dirname(os.path.abspath(config_path)))
+                git_root = os.path.dirname(os.path.dirname(os.path.abspath(config_path)))
             else:
                 git_root = os.getcwd()
             name = os.path.basename(git_root)
@@ -275,7 +266,10 @@ def _init_session_label(config_path):
             try:
                 out = subprocess.run(
                     ["git", "-C", git_root, "rev-parse", "--abbrev-ref", "HEAD"],
-                    capture_output=True, text=True, timeout=2)
+                    capture_output=True,
+                    text=True,
+                    timeout=2,
+                )
                 if out.returncode == 0:
                     branch = out.stdout.strip()
             except Exception:
@@ -349,8 +343,7 @@ def find_latest_versioned_toe(toe_path):
     if not m:
         return toe_path
     prefix = m.group(1)
-    pattern = re.compile(
-        r"^" + re.escape(prefix) + r"(\d+)\.toe$")
+    pattern = re.compile(r"^" + re.escape(prefix) + r"(\d+)\.toe$")
     best_n = -1
     best_path = toe_path
     try:
@@ -366,8 +359,10 @@ def find_latest_versioned_toe(toe_path):
             best_n = n
             best_path = os.path.join(directory, entry)
     if best_n >= 0 and best_path != toe_path:
-        log(f"Resolved stale toe_path to versioned sibling: "
-            f"{os.path.basename(toe_path)} -> {os.path.basename(best_path)}")
+        log(
+            f"Resolved stale toe_path to versioned sibling: "
+            f"{os.path.basename(toe_path)} -> {os.path.basename(best_path)}"
+        )
     return best_path
 
 
@@ -412,8 +407,7 @@ def load_project_config(config_path):
     """
     if not config_path:
         return {}
-    project_json = os.path.join(
-        os.path.dirname(os.path.abspath(config_path)), "project.json")
+    project_json = os.path.join(os.path.dirname(os.path.abspath(config_path)), "project.json")
     if not os.path.isfile(project_json):
         return {}
     try:
@@ -451,10 +445,10 @@ def _read_macos_app_build(app_path):
         return None
     try:
         import plistlib
+
         with open(plist, "rb") as f:
             data = plistlib.load(f)
-        return (data.get("CFBundleShortVersionString")
-                or data.get("CFBundleVersion"))
+        return data.get("CFBundleShortVersionString") or data.get("CFBundleVersion")
     except Exception:
         return None
 
@@ -467,6 +461,7 @@ def find_td_installs():
     Windows, ELF binary on Linux). Empty list if none found.
     """
     import glob
+
     installs = []
 
     if sys.platform == "win32":
@@ -489,8 +484,10 @@ def find_td_installs():
         # (e.g. TouchDesigner.app, TouchDesigner 2025.app). Globbing the
         # common patterns covers both.
         candidates = set()
-        for pattern in ("/Applications/TouchDesigner.app",
-                        "/Applications/TouchDesigner*.app"):
+        for pattern in (
+            "/Applications/TouchDesigner.app",
+            "/Applications/TouchDesigner*.app",
+        ):
             for p in glob.glob(pattern):
                 candidates.add(p)
         for app in candidates:
@@ -543,11 +540,9 @@ def select_td_install(target_build, fallback_exe=None, installs=None):
                 return exe, None
 
         # 2. Same year, closest build number
-        same_year = [(b, e) for b, e in installs
-                     if _parse_build(b) and _parse_build(b)[0] == target[0]]
+        same_year = [(b, e) for b, e in installs if _parse_build(b) and _parse_build(b)[0] == target[0]]
         if same_year:
-            same_year.sort(
-                key=lambda x: abs(_parse_build(x[0])[1] - target[1]))
+            same_year.sort(key=lambda x: abs(_parse_build(x[0])[1] - target[1]))
             build, exe = same_year[0]
             return exe, (
                 f"Project pinned to TouchDesigner {target_build}, but "
@@ -588,6 +583,7 @@ def select_td_install(target_build, fallback_exe=None, installs=None):
 # Process management
 # ---------------------------------------------------------------------------
 
+
 def _process_cmdline(pid):
     """Return the full command line for a PID, or '' if unavailable."""
     try:
@@ -598,7 +594,9 @@ def _process_cmdline(pid):
         # macOS / BSD
         result = subprocess.run(
             ["ps", "-p", str(pid), "-o", "args="],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         return result.stdout
     except (OSError, subprocess.TimeoutExpired, FileNotFoundError):
@@ -646,7 +644,9 @@ def _process_is_real_td(pid):
     try:
         result = subprocess.run(
             ["ps", "-o", "state=", "-o", "comm=", "-p", str(pid)],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
     except (subprocess.TimeoutExpired, FileNotFoundError, ValueError, OSError):
         return False
@@ -664,9 +664,11 @@ def _process_is_real_td(pid):
     # on macOS, bin/TouchDesigner on Linux).  An unrelated process whose argv
     # merely contains "TouchDesigner" has a different executable (zsh, codex,
     # python, ...); bundled helpers are named e.g. "TouchDesigner Web Render".
-    return (os.path.basename(comm) == "TouchDesigner"
-            or comm.endswith("/Contents/MacOS/TouchDesigner")
-            or comm.endswith("/bin/TouchDesigner"))
+    return (
+        os.path.basename(comm) == "TouchDesigner"
+        or comm.endswith("/Contents/MacOS/TouchDesigner")
+        or comm.endswith("/bin/TouchDesigner")
+    )
 
 
 def find_all_td_pids():
@@ -680,9 +682,10 @@ def find_all_td_pids():
     if sys.platform == "win32":
         try:
             result = subprocess.run(
-                ["tasklist", "/FI", "IMAGENAME eq TouchDesigner*",
-                 "/FO", "CSV", "/NH"],
-                capture_output=True, text=True, timeout=5,
+                ["tasklist", "/FI", "IMAGENAME eq TouchDesigner*", "/FO", "CSV", "/NH"],
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             for line in result.stdout.strip().split("\n"):
                 if "TouchDesigner" in line:
@@ -703,7 +706,9 @@ def find_all_td_pids():
     try:
         result = subprocess.run(
             ["pgrep", "-f", "TouchDesigner"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if result.returncode == 0:
             for line in result.stdout.strip().split("\n"):
@@ -744,6 +749,7 @@ def is_process_alive(pid):
         # which only requires the right to wait on the object.
         try:
             import ctypes
+
             kernel32 = ctypes.windll.kernel32
             SYNCHRONIZE = 0x00100000
             handle = kernel32.OpenProcess(SYNCHRONIZE, False, pid)
@@ -769,10 +775,11 @@ def ping_envoy_port(port):
     if port is None:
         return False
     import socket
+
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(1)
-            return s.connect_ex(('127.0.0.1', int(port))) == 0
+            return s.connect_ex(("127.0.0.1", int(port))) == 0
     except (OSError, ValueError):
         return False
 
@@ -844,6 +851,7 @@ def _heartbeat_path(config_path, pid=None):
         if os.path.isdir(log_dir):
             return os.path.join(log_dir, filename)
     import tempfile
+
     return os.path.join(tempfile.gettempdir(), filename)
 
 
@@ -851,9 +859,15 @@ def _touch_heartbeat(config_path):
     """Write PID + timestamp to our heartbeat file.  Best-effort, never raises."""
     try:
         path = _heartbeat_path(config_path)
-        atomic_write_json(path, {"pid": os.getpid(), "time": time.time(),
-                                 "sid": SESSION_ID,
-                                 "label": SESSION_LABEL or f"pid{_MY_PID}"})
+        atomic_write_json(
+            path,
+            {
+                "pid": os.getpid(),
+                "time": time.time(),
+                "sid": SESSION_ID,
+                "label": SESSION_LABEL or f"pid{_MY_PID}",
+            },
+        )
     except Exception:
         pass
 
@@ -877,6 +891,7 @@ def _list_live_sessions(config_path):
     Best-effort: never raises.
     """
     import glob as _glob
+
     sessions = []
     try:
         if config_path:
@@ -886,6 +901,7 @@ def _list_live_sessions(config_path):
             log_dir = os.path.join(git_root, "dev", "logs")
         else:
             import tempfile
+
             log_dir = tempfile.gettempdir()
         if not os.path.isdir(log_dir):
             return sessions
@@ -914,12 +930,14 @@ def _list_live_sessions(config_path):
         pass
     return sessions
 
+
 def _list_stale_heartbeats(config_path, max_age_s):
     """Glob for heartbeat files and return [(pid, age)] for stale ones.
 
     Also removes heartbeat files for PIDs that are no longer alive.
     """
     import glob as _glob
+
     stale = []
     if config_path:
         # Config is in .embody/ - git root is one level up
@@ -928,6 +946,7 @@ def _list_stale_heartbeats(config_path, max_age_s):
         log_dir = os.path.join(git_root, "dev", "logs")
     else:
         import tempfile
+
         log_dir = tempfile.gettempdir()
     if not os.path.isdir(log_dir):
         return stale
@@ -975,12 +994,14 @@ def quit_td(pid, graceful_timeout=15):
         if sys.platform == "darwin":
             subprocess.run(
                 ["osascript", "-e", 'quit app "TouchDesigner"'],
-                capture_output=True, timeout=10,
+                capture_output=True,
+                timeout=10,
             )
         elif sys.platform == "win32":
             subprocess.run(
                 ["taskkill", "/PID", str(pid)],
-                capture_output=True, timeout=10,
+                capture_output=True,
+                timeout=10,
             )
         else:
             os.kill(pid, signal.SIGTERM)
@@ -1000,7 +1021,8 @@ def quit_td(pid, graceful_timeout=15):
         if sys.platform == "win32":
             subprocess.run(
                 ["taskkill", "/F", "/PID", str(pid)],
-                capture_output=True, timeout=10,
+                capture_output=True,
+                timeout=10,
             )
         else:
             os.kill(pid, signal.SIGKILL)
@@ -1065,21 +1087,22 @@ def launch_td(config, config_path, project_path=None, existing_pids=None):
     if sys.platform == "darwin":
         # On macOS, td_executable is the .app bundle path
         if not os.path.exists(td_exe):
-            return (False,
-                    f"TouchDesigner not found at {td_exe}. "
-                    "Install this version or update td_executable in envoy.json",
-                    None)
+            return (
+                False,
+                f"TouchDesigner not found at {td_exe}. Install this version or update td_executable in envoy.json",
+                None,
+            )
     else:
         if not os.path.isfile(td_exe):
-            return (False,
-                    f"TouchDesigner executable not found at {td_exe}. "
-                    "Install this version or update td_executable in envoy.json",
-                    None)
+            return (
+                False,
+                f"TouchDesigner executable not found at {td_exe}. "
+                "Install this version or update td_executable in envoy.json",
+                None,
+            )
 
     if not os.path.isfile(toe_path):
-        return (False,
-                f"Project file not found: {toe_path}",
-                None)
+        return (False, f"Project file not found: {toe_path}", None)
 
     # Launch TD
     log(f"Launching TouchDesigner: {td_exe} with {toe_path}")
@@ -1098,8 +1121,7 @@ def launch_td(config, config_path, project_path=None, existing_pids=None):
             # diffing against the pre-launch snapshot.
             proc.wait(timeout=10)
             time.sleep(2)  # Give TD a moment to start
-            new_pids = [p for p in find_all_td_pids()
-                        if p not in existing_pids]
+            new_pids = [p for p in find_all_td_pids() if p not in existing_pids]
             pid = new_pids[0] if new_pids else None
         elif sys.platform == "win32":
             proc = subprocess.Popen(
@@ -1126,6 +1148,7 @@ def launch_td(config, config_path, project_path=None, existing_pids=None):
 # Meta-tool handlers
 # ---------------------------------------------------------------------------
 
+
 def handle_get_td_status(state):
     """Handle the get_td_status meta-tool."""
     with state:
@@ -1143,13 +1166,9 @@ def handle_get_td_status(state):
 
     last_ts = None
     if last_connected_time is not None:
-        last_ts = time.strftime(
-            "%Y-%m-%dT%H:%M:%SZ", time.gmtime(last_connected_time))
+        last_ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(last_connected_time))
 
-    remaining = CRASH_LOOP_MAX - len([
-        t for t in launch_timestamps
-        if t > time.monotonic() - CRASH_LOOP_WINDOW_S
-    ])
+    remaining = CRASH_LOOP_MAX - len([t for t in launch_timestamps if t > time.monotonic() - CRASH_LOOP_WINDOW_S])
 
     # Include instance registry with reachability
     config = load_config(config_path)
@@ -1217,8 +1236,7 @@ def handle_switch_instance(params, state):
     # Switch the bridge's in-memory state
     old_active = active_name
     config_pid = info.get("td_pid")
-    resolved_pid = (config_pid if config_pid and is_process_alive(config_pid)
-                    else find_td_pid())
+    resolved_pid = config_pid if config_pid and is_process_alive(config_pid) else find_td_pid()
     with state:
         old_url = state.url
         state.url = f"http://localhost:{target_port}/mcp"
@@ -1250,8 +1268,7 @@ def handle_switch_instance(params, state):
     try:
         notify_stdout("notifications/tools/list_changed")
     except Exception as e:
-        log(f"notify_stdout failed in switch_instance: "
-            f"{type(e).__name__}: {e}")
+        log(f"notify_stdout failed in switch_instance: {type(e).__name__}: {e}")
 
     return {
         "status": "success",
@@ -1340,8 +1357,7 @@ def handle_launch_td(params, state):
     # Crash-loop guard
     now = time.monotonic()
     with state:
-        recent = [t for t in state.launch_timestamps
-                  if t > now - CRASH_LOOP_WINDOW_S]
+        recent = [t for t in state.launch_timestamps if t > now - CRASH_LOOP_WINDOW_S]
     if len(recent) >= CRASH_LOOP_MAX:
         return {
             "status": "error",
@@ -1357,9 +1373,7 @@ def handle_launch_td(params, state):
     pre_launch_pids = find_all_td_pids()
 
     # Launch
-    success, message, pid = launch_td(config, config_path,
-                                      project_path=project_path,
-                                      existing_pids=pre_launch_pids)
+    success, message, pid = launch_td(config, config_path, project_path=project_path, existing_pids=pre_launch_pids)
     if not success:
         return {"status": "error", "message": message}
 
@@ -1402,9 +1416,7 @@ def handle_restart_td(params, state):
     if not pid or not is_process_alive(pid):
         return {
             "status": "error",
-            "message": (
-                "TouchDesigner is not running. Use launch_td to start it."
-            ),
+            "message": ("TouchDesigner is not running. Use launch_td to start it."),
         }
 
     log(f"Restarting TouchDesigner (PID {pid})")
@@ -1422,8 +1434,7 @@ def handle_restart_td(params, state):
         config_path = state.config_path
 
     # Launch fresh (optionally with a different .toe)
-    success, launch_msg, new_pid = launch_td(config, config_path,
-                                              project_path=project_path)
+    success, launch_msg, new_pid = launch_td(config, config_path, project_path=project_path)
     if not success:
         return {"status": "error", "message": launch_msg}
 
@@ -1442,10 +1453,7 @@ def handle_restart_td(params, state):
         log("Envoy is reachable after TD restart")
         return {
             "status": "success",
-            "message": (
-                f"TouchDesigner restarted and Envoy is ready. "
-                f"Old PID: {pid}, New PID: {new_pid}"
-            ),
+            "message": (f"TouchDesigner restarted and Envoy is ready. Old PID: {pid}, New PID: {new_pid}"),
         }
     else:
         return {
@@ -1478,20 +1486,13 @@ def handle_bridge_tool(name, params, state):
 # Tool list augmentation
 # ---------------------------------------------------------------------------
 
+
 def augment_tools_list(response):
     """Append bridge meta-tools to a tools/list response from TD."""
-    if (response
-            and "result" in response
-            and "tools" in response["result"]):
+    if response and "result" in response and "tools" in response["result"]:
         tools = response["result"]["tools"]
-        existing = {
-            tool.get("name") for tool in tools
-            if isinstance(tool, dict)
-        }
-        tools.extend(
-            tool for tool in BRIDGE_TOOLS
-            if tool.get("name") not in existing
-        )
+        existing = {tool.get("name") for tool in tools if isinstance(tool, dict)}
+        tools.extend(tool for tool in BRIDGE_TOOLS if tool.get("name") not in existing)
     return response
 
 
@@ -1561,8 +1562,7 @@ def best_available_tools_list(request_id, config_path):
     """
     cached = load_tools_cache(config_path)
     if cached:
-        log(f"Returning {len(cached)} tools from disk cache "
-            "(Envoy not yet reachable)")
+        log(f"Returning {len(cached)} tools from disk cache (Envoy not yet reachable)")
         return {
             "jsonrpc": "2.0",
             "id": request_id,
@@ -1574,6 +1574,7 @@ def best_available_tools_list(request_id, config_path):
 # ---------------------------------------------------------------------------
 # HTTP forwarding and connection management
 # ---------------------------------------------------------------------------
+
 
 def forward_to_http(url, message, timeout=300):
     """Forward a JSON-RPC message to the Envoy HTTP endpoint.
@@ -1639,13 +1640,12 @@ def _get_parent_pid(pid):
     """Return the parent PID of a given process, or None on failure."""
     if sys.platform == "win32":
         try:
-            ps_cmd = (
-                f'(Get-CimInstance Win32_Process -Filter '
-                f'"ProcessId = {pid}").ParentProcessId'
-            )
+            ps_cmd = f'(Get-CimInstance Win32_Process -Filter "ProcessId = {pid}").ParentProcessId'
             result = subprocess.run(
                 ["powershell", "-NoProfile", "-Command", ps_cmd],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             val = result.stdout.strip()
             return int(val) if val.isdigit() else None
@@ -1664,7 +1664,9 @@ def _get_parent_pid(pid):
     try:
         result = subprocess.run(
             ["ps", "-p", str(pid), "-o", "ppid="],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         val = result.stdout.strip()
         return int(val) if val else None
@@ -1703,30 +1705,37 @@ def kill_stale_bridges(port, config_path):
             if sys.platform == "win32":
                 subprocess.run(
                     ["taskkill", "/F", "/PID", str(pid)],
-                    capture_output=True, timeout=5,
+                    capture_output=True,
+                    timeout=5,
                 )
             else:
                 os.kill(pid, signal.SIGTERM)
             log(f"Terminated stale bridge (PID {pid}, heartbeat {age:.0f}s old)")
-        except (ProcessLookupError, PermissionError, OSError,
-                subprocess.TimeoutExpired):
+        except (
+            ProcessLookupError,
+            PermissionError,
+            OSError,
+            subprocess.TimeoutExpired,
+        ):
             pass
 
     # --- Phase 2: Legacy fallback (pgrep/tasklist + orphan check) ---
     if sys.platform == "win32":
         try:
             ps_cmd = (
-                f'Get-CimInstance Win32_Process -Filter '
-                f'"Name like \'%python%\'" | '
+                f"Get-CimInstance Win32_Process -Filter "
+                f"\"Name like '%python%'\" | "
                 f'Where-Object {{ $_.CommandLine -match "envoy.bridge" -and '
                 f'$_.CommandLine -match "--port {port}" -and '
-                f'$_.ProcessId -ne {my_pid} }} | '
-                f'Select-Object ProcessId, ParentProcessId | '
+                f"$_.ProcessId -ne {my_pid} }} | "
+                f"Select-Object ProcessId, ParentProcessId | "
                 f'ForEach-Object {{ "$($_.ProcessId),$($_.ParentProcessId)" }}'
             )
             result = subprocess.run(
                 ["powershell", "-NoProfile", "-Command", ps_cmd],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             for line in result.stdout.strip().split("\n"):
                 line = line.strip()
@@ -1743,7 +1752,8 @@ def kill_stale_bridges(port, config_path):
                 try:
                     subprocess.run(
                         ["taskkill", "/F", "/PID", str(pid)],
-                        capture_output=True, timeout=5,
+                        capture_output=True,
+                        timeout=5,
                     )
                     log(f"Terminated orphan bridge (PID {pid}, parent {ppid} dead)")
                 except (subprocess.TimeoutExpired, OSError):
@@ -1754,7 +1764,9 @@ def kill_stale_bridges(port, config_path):
     try:
         result = subprocess.run(
             ["pgrep", "-f", "envoy-bridge.py"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if result.returncode != 0:
             return
@@ -1776,7 +1788,9 @@ def kill_stale_bridges(port, config_path):
                 else:
                     ps = subprocess.run(
                         ["ps", "-p", str(pid), "-o", "args="],
-                        capture_output=True, text=True, timeout=5,
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
                     )
                     cmdline = ps.stdout.strip()
                 if f"--port" in cmdline and str(port) in cmdline:
@@ -1799,34 +1813,33 @@ def start_orphan_watchdog(stdin_probe_fd, config_path):
     detection which failed because the VS Code extension host (the actual
     parent) outlives individual Claude Code sessions.
     """
+
     def watchdog():
         try:
             if sys.platform == "win32":
                 import ctypes
                 import msvcrt
+
                 handle = msvcrt.get_osfhandle(stdin_probe_fd)
                 kernel32 = ctypes.windll.kernel32
                 while True:
                     time.sleep(STDIN_POLL_INTERVAL_MS / 1000)
                     avail = ctypes.c_ulong(0)
-                    ok = kernel32.PeekNamedPipe(
-                        handle, None, 0, None, ctypes.byref(avail), None)
+                    ok = kernel32.PeekNamedPipe(handle, None, 0, None, ctypes.byref(avail), None)
                     if not ok:
                         log("stdin pipe broken (Windows). Session ended. Exiting.")
                         _cleanup_heartbeat(config_path)
                         os._exit(0)
             else:
                 import select as _select
+
                 poller = _select.poll()
-                poller.register(stdin_probe_fd,
-                                _select.POLLIN | _select.POLLHUP)
+                poller.register(stdin_probe_fd, _select.POLLIN | _select.POLLHUP)
                 while True:
                     events = poller.poll(STDIN_POLL_INTERVAL_MS)
                     for fd, event in events:
-                        if event & (_select.POLLHUP | _select.POLLERR
-                                    | _select.POLLNVAL):
-                            log("stdin pipe closed (POLLHUP). "
-                                "Session ended. Exiting.")
+                        if event & (_select.POLLHUP | _select.POLLERR | _select.POLLNVAL):
+                            log("stdin pipe closed (POLLHUP). Session ended. Exiting.")
                             _cleanup_heartbeat(config_path)
                             os._exit(0)
         except Exception as e:
@@ -1849,7 +1862,8 @@ def wait_for_envoy(url, deadline):
             # timeout, DNS) indicate it's not running yet.
             urllib.request.urlopen(
                 urllib.request.Request(
-                    url, data=b"{}",
+                    url,
+                    data=b"{}",
                     headers={
                         "Content-Type": "application/json",
                         "Accept": "application/json, text/event-stream",
@@ -1871,8 +1885,10 @@ def wait_for_envoy(url, deadline):
             break
         actual_wait = min(wait, remaining)
         elapsed = CONNECT_TIMEOUT_S - remaining
-        log(f"Waiting for Envoy ({elapsed:.0f}s elapsed, retry in {actual_wait:.1f}s). "
-            f"Ensure TouchDesigner is running with Envoy enabled.")
+        log(
+            f"Waiting for Envoy ({elapsed:.0f}s elapsed, retry in {actual_wait:.1f}s). "
+            f"Ensure TouchDesigner is running with Envoy enabled."
+        )
         time.sleep(actual_wait)
         attempt += 1
     return False
@@ -1882,6 +1898,7 @@ def wait_for_envoy(url, deadline):
 # Connection loss error messages
 # ---------------------------------------------------------------------------
 
+
 def connection_lost_message(state):
     """Generate an actionable error message when the connection to Envoy is lost."""
     with state:
@@ -1889,25 +1906,20 @@ def connection_lost_message(state):
     if pid and not is_process_alive(pid):
         with state:
             state.crash_detected = True
-        return (
-            "TouchDesigner has crashed. "
-            "Use the launch_td tool to restart it."
-        )
+        return "TouchDesigner has crashed. Use the launch_td tool to restart it."
     elif pid and is_process_alive(pid):
         return (
             f"TouchDesigner is not responding but the process is still "
             f"running (PID {pid}). It may be frozen or handling a long operation."
         )
     else:
-        return (
-            "Envoy connection lost. "
-            "Use get_td_status to check and launch_td to restart."
-        )
+        return "Envoy connection lost. Use get_td_status to check and launch_td to restart."
 
 
 # ---------------------------------------------------------------------------
 # Tool list hashing, backend probes, and background reconciler
 # ---------------------------------------------------------------------------
+
 
 def _hash_tools(tools):
     """Return a stable SHA-1 hash of a tools/list payload.
@@ -1920,8 +1932,7 @@ def _hash_tools(tools):
         return hashlib.sha1(b"[]").hexdigest()
     try:
         payload = sorted(
-            ({"n": t.get("name", ""), "d": t.get("description", "")}
-             for t in tools),
+            ({"n": t.get("name", ""), "d": t.get("description", "")} for t in tools),
             key=lambda item: item["n"],
         )
     except (TypeError, AttributeError):
@@ -2118,9 +2129,10 @@ def start_reconciler(state, on_tools_change):
     exceptions inside the loop body are caught and logged -- the thread
     must never die.
     """
+
     def loop():
         # Force first heartbeat on tick 0 (i.e. after the initial sleep)
-        last_heartbeat_at_tick = -10 ** 9
+        last_heartbeat_at_tick = -(10**9)
         tick = 0
         while True:
             time.sleep(CONFIG_TICK_S)
@@ -2135,8 +2147,7 @@ def start_reconciler(state, on_tools_change):
                 _touch_heartbeat(state.config_path)
             except Exception as e:
                 # NEVER let an exception kill the reconciler -- log and continue
-                log(f"Reconciler error (continuing): "
-                    f"{type(e).__name__}: {e}")
+                log(f"Reconciler error (continuing): {type(e).__name__}: {e}")
             tick += 1
 
     t = threading.Thread(target=loop, daemon=True, name="envoy-reconciler")
@@ -2147,6 +2158,7 @@ def start_reconciler(state, on_tools_change):
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def _resolve_from_registry(config, fallback_port):
     """Resolve port and PID from the instance registry.
@@ -2183,14 +2195,12 @@ def _install_signal_diagnostics():
     ppid = os.getppid()
 
     def _handle_sigterm(signum, frame):
-        log(f"Received SIGTERM (PID {my_pid}, parent {os.getppid()}, "
-            f"original parent {ppid})")
+        log(f"Received SIGTERM (PID {my_pid}, parent {os.getppid()}, original parent {ppid})")
         _cleanup_heartbeat(_config_path_for_cleanup)
         sys.exit(0)
 
     def _handle_sigint(signum, frame):
-        log(f"Received SIGINT (PID {my_pid}, parent {os.getppid()}, "
-            f"original parent {ppid})")
+        log(f"Received SIGINT (PID {my_pid}, parent {os.getppid()}, original parent {ppid})")
         raise KeyboardInterrupt
 
     signal.signal(signal.SIGTERM, _handle_sigterm)
@@ -2229,11 +2239,9 @@ def main():
     my_pid = os.getpid()
     ppid = os.getppid()
     if active_name:
-        log(f"Starting (instance: {active_name}, port: {port}) "
-            f"[PID {my_pid}, parent {ppid}]")
+        log(f"Starting (instance: {active_name}, port: {port}) [PID {my_pid}, parent {ppid}]")
     else:
-        log(f"Starting (target: localhost:{port}) "
-            f"[PID {my_pid}, parent {ppid}]")
+        log(f"Starting (target: localhost:{port}) [PID {my_pid}, parent {ppid}]")
     if config_path:
         log(f"Config: {config_path}")
         td_exe = config.get("td_executable", "")
@@ -2252,6 +2260,7 @@ def main():
     _init_session_label(config_path)
     _touch_heartbeat(config_path)
     import atexit
+
     atexit.register(_cleanup_heartbeat, config_path)
 
     # Install signal handlers AFTER logging init so we can see what kills us
@@ -2361,11 +2370,12 @@ def main():
                     log("Connected to Envoy (during tools/list)")
                     # Fall through to the forwarding path below
                 else:
-                    log("Envoy not reachable within quick probe -- "
-                        "returning cached/bridge-only tools (reconciler will recover)")
+                    log(
+                        "Envoy not reachable within quick probe -- "
+                        "returning cached/bridge-only tools (reconciler will recover)"
+                    )
                     if not is_notification:
-                        send_response(best_available_tools_list(
-                            request_id, state.config_path))
+                        send_response(best_available_tools_list(request_id, state.config_path))
                     continue
 
         # --- Tool list cache hit (connected path) ---
@@ -2399,8 +2409,7 @@ def main():
             with state:
                 fresh_config_path = state.config_path
             fresh_config = load_config(fresh_config_path)
-            new_port, new_pid, new_active = _resolve_from_registry(
-                fresh_config, cli_port)
+            new_port, new_pid, new_active = _resolve_from_registry(fresh_config, cli_port)
             new_url = f"http://localhost:{new_port}/mcp" if new_port else current_url
             if new_url != current_url:
                 with state:
@@ -2409,8 +2418,10 @@ def main():
                     state.active_name = new_active
                 current_url = new_url
                 port = new_port
-                log(f"Config changed -- now targeting port {port}"
-                    + (f" (instance: {new_active})" if new_active else ""))
+                log(
+                    f"Config changed -- now targeting port {port}"
+                    + (f" (instance: {new_active})" if new_active else "")
+                )
             if new_pid:
                 with state:
                     state.td_pid = new_pid
@@ -2443,7 +2454,8 @@ def main():
             log(f"Unexpected error (bridge staying alive): {type(e).__name__}: {e}")
             if not is_notification:
                 send_error(
-                    request_id, -32000,
+                    request_id,
+                    -32000,
                     f"Unexpected error ({type(e).__name__}: {e}). Will reconnect on next request.",
                 )
 

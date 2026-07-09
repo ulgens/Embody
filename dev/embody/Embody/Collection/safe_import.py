@@ -3,6 +3,7 @@
 This module is intentionally headless: it imports no TouchDesigner modules and
 operates only on parsed TDN dictionaries.
 """
+
 from __future__ import annotations
 
 import copy
@@ -141,6 +142,7 @@ def _is_dangerous_expression(value):
         return True
     src = _expr_source(value)
     return src is None or not _PRESERVE_PURE(src)
+
 
 NUMERIC_STYLES = {
     "Float",
@@ -746,7 +748,11 @@ def _original_expression(value):
 
 
 def _safe_constant(par_name: str, style: str | None, existing_default):
-    if existing_default is not _MISSING and not _is_expression_or_bind(existing_default) and _is_json_scalar(existing_default):
+    if (
+        existing_default is not _MISSING
+        and not _is_expression_or_bind(existing_default)
+        and _is_json_scalar(existing_default)
+    ):
         return copy.deepcopy(existing_default)
 
     if style == "Toggle":
@@ -832,9 +838,7 @@ def _is_off_constant(value) -> bool:
 
 
 def _is_operator_disabled(node: dict, type_defaults: dict) -> bool:
-    return _has_bypass(node, type_defaults) or _is_off_constant(
-        _effective_param(node, type_defaults, "active")
-    )
+    return _has_bypass(node, type_defaults) or _is_off_constant(_effective_param(node, type_defaults, "active"))
 
 
 def _has_bypass(node: dict, type_defaults: dict) -> bool:

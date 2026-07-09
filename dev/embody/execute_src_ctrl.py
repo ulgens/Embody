@@ -1,35 +1,37 @@
 # me - this DAT
-# 
+#
 # frame - the current frame
 # state - True if the timeline is paused
-# 
+#
 # Make sure the corresponding toggle is enabled in the Execute DAT.
 
 from pathlib import Path
 
 comp = op.Embody
-readme = Path(project.folder).parents[0] / 'README.md'
+readme = Path(project.folder).parents[0] / "README.md"
+
 
 def version(version):
     # get current versions
-    increment = int(version.rsplit('.', 1)[1])
-    major_minor = version.rsplit('.', 1)[0]
+    increment = int(version.rsplit(".", 1)[1])
+    major_minor = version.rsplit(".", 1)[0]
     # update version
     increment += 1
     new_version = f"{major_minor}.{increment}"
     comp.par.Version.val = new_version
     return new_version
 
+
 def updateReadme(build, version):
     # README contains emoji; pin UTF-8 so locale-default codecs don't crash.
-    with open(readme, 'r', encoding='utf-8') as f:
+    with open(readme, "r", encoding="utf-8") as f:
         file_content = f.readlines()
 
-    with open(readme, 'w', encoding='utf-8') as writer:
+    with open(readme, "w", encoding="utf-8") as writer:
         for line in file_content:
             # We search for the correct section
-            build_pre = '#### :floppy_disk: TouchDesigner'
-            version_pre = '#### :floppy_disk: version'
+            build_pre = "#### :floppy_disk: TouchDesigner"
+            version_pre = "#### :floppy_disk: version"
 
             if line.startswith(build_pre):
                 line = f"{build_pre} {build} (Windows/macOS)\n"
@@ -39,30 +41,38 @@ def updateReadme(build, version):
             # Re-write the file at each iteration
             writer.write(line)
 
+
 def onStart():
     return
+
 
 def onCreate():
     return
 
+
 def onExit():
     return
+
 
 def onFrameStart(frame):
     return
 
+
 def onFrameEnd(frame):
     return
+
 
 def onPlayStateChange(state):
     return
 
+
 def onDeviceChange():
     return
 
+
 def onProjectPreSave():
     # set page for component
-    comp.currentPage = 'Embody'
+    comp.currentPage = "Embody"
 
     build = project.saveBuild
     old_version = comp.par.Version.val
@@ -76,7 +86,7 @@ def onProjectPreSave():
 
     # try to delete last release
     try:
-        old_release = Path(project.folder).parents[0] / 'release' / f"{comp.name}-v{old_version}.tox"
+        old_release = Path(project.folder).parents[0] / "release" / f"{comp.name}-v{old_version}.tox"
         old_release.unlink()
     except Exception as e:
         # You might want to log the exception for debugging purposes
@@ -84,12 +94,13 @@ def onProjectPreSave():
         pass
 
     # Clear TDN UI pars so the baked .tox doesn't carry stale paths
-    comp.par.Tdnfile = ''
-    comp.par.Networkpath = ''
+    comp.par.Tdnfile = ""
+    comp.par.Networkpath = ""
 
     # save out self-contained portable .tox (strips external file references)
-    save_path = Path(project.folder).parents[0] / 'release' / f"{comp.name}-v{new_version}.tox"
+    save_path = Path(project.folder).parents[0] / "release" / f"{comp.name}-v{new_version}.tox"
     comp.ExportPortableTox(save_path=str(save_path))
+
 
 def onProjectPostSave():
     return

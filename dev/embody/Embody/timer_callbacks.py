@@ -7,8 +7,8 @@
 #
 # segment - an object describing the segment:
 #
-#    can be automatically cast to its index: e.g.:  segment+3, segment==2, etc      
-#    
+#    can be automatically cast to its index: e.g.:  segment+3, segment==2, etc
+#
 #  members of segment object:
 #      index     numeric order of the segment, from 0
 #      owner    Timer CHOP it belongs to
@@ -33,42 +33,52 @@
 # called again after the returned number of frames.
 # callCount increments with each attempt, starting at 1
 
+
 def onInitialize(timerOp, callCount):
-	return 0
+    return 0
+
 
 def onReady(timerOp):
-	return
-	
+    return
+
+
 def onStart(timerOp):
-	return
-	
+    return
+
+
 def onTimerPulse(timerOp, segment):
-	return
+    return
+
 
 def whileTimerActive(timerOp, segment, cycle, fraction):
-	return
+    return
+
 
 def onSegmentEnter(timerOp, segment, interrupt):
-	return
-	
+    return
+
+
 def onSegmentExit(timerOp, segment, interrupt):
-	return
+    return
+
 
 def onCycleStart(timerOp, segment, cycle):
-	return
+    return
+
 
 def onCycleEndAlert(timerOp, segment, cycle, alertSegment, alertDone, interrupt):
-	return
-	
+    return
+
+
 def onCycle(timerOp, segment, cycle):
-	return
+    return
+
 
 def onDone(timerOp, segment, interrupt):
-	timerOp.par.active = 0
-	
-	return
+    timerOp.par.active = 0
+
+    return
+
 
 def onSubrangeStart(timerOp):
-	return
-
-	
+    return

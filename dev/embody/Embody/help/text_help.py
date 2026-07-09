@@ -1,4 +1,4 @@
-'''
+"""
 Embody v{{VERSION}}
 ===============
 
@@ -53,4 +53,4 @@ Envoy tool, and troubleshooting -- see the docs:
   https://dylanroscover.github.io/Embody/
 
 The Github button on the Embody page opens the source repo.
-'''
+"""

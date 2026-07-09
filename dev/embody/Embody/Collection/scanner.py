@@ -3,6 +3,7 @@
 This module intentionally imports no TouchDesigner modules. It accepts a parsed
 TDN dict and returns the frozen C2 CapabilityJson shape from contracts.py.
 """
+
 from __future__ import annotations
 
 import ast
@@ -31,8 +32,6 @@ def empty_capability_counts() -> dict:
     return {k: 0 for k in CAPABILITY_SURFACES}
 
 
-
-
 MAX_SERIALIZED_TDN_BYTES = 5 * 1024 * 1024
 MAX_OPERATORS = 50000
 MAX_AST_DEPTH = 80
@@ -40,34 +39,32 @@ MAX_AST_NODES = 10000
 MAX_AST_SOURCE_CHARS = 200000
 EVIDENCE_LIMIT = 200
 
-DENYLIST_SEED_TYPES = frozenset(
-    (
-        "webclientDAT",
-        "webserverDAT",
-        "tcpipDAT",
-        "udpinDAT",
-        "udpoutDAT",
-        "oscinDAT",
-        "oscoutDAT",
-        "serialDAT",
-        "runDAT",
-        "executeDAT",
-        "datexecuteDAT",
-        "chopexecuteDAT",
-        "parameterexecuteDAT",
-        "parametergroupexecuteDAT",
-        "panelexecuteDAT",
-        "opexecuteDAT",
-        "moviefileinTOP",
-        "moviefileoutTOP",
-        "folderDAT",
-        "touchinTOP",
-        "touchoutTOP",
-        "webRenderTOP",
-        "ndi*",
-        "syphonspout*",
-    )
-)
+DENYLIST_SEED_TYPES = frozenset((
+    "webclientDAT",
+    "webserverDAT",
+    "tcpipDAT",
+    "udpinDAT",
+    "udpoutDAT",
+    "oscinDAT",
+    "oscoutDAT",
+    "serialDAT",
+    "runDAT",
+    "executeDAT",
+    "datexecuteDAT",
+    "chopexecuteDAT",
+    "parameterexecuteDAT",
+    "parametergroupexecuteDAT",
+    "panelexecuteDAT",
+    "opexecuteDAT",
+    "moviefileinTOP",
+    "moviefileoutTOP",
+    "folderDAT",
+    "touchinTOP",
+    "touchoutTOP",
+    "webRenderTOP",
+    "ndi*",
+    "syphonspout*",
+))
 
 _DENYLIST_NORMALIZED = frozenset(
     re.sub(r"[^a-z0-9]", "", t.lower()) for t in DENYLIST_SEED_TYPES if not t.endswith("*")
@@ -77,49 +74,46 @@ _DENYLIST_NORMALIZED = frozenset(
 # IO/network ops, so they are tracked separately and counted as an execute surface
 # (safe_import bypasses them).
 _SCRIPT_OP_TYPES = frozenset((
-    "scriptdat", "scriptchop", "scripttop", "scriptsop",
+    "scriptdat",
+    "scriptchop",
+    "scripttop",
+    "scriptsop",
 ))
 
-_BAD_NAMES = frozenset(
-    (
-        "eval",
-        "exec",
-        "compile",
-        "__import__",
-        "os",
-        "sys",
-        "subprocess",
-        "socket",
-        "shutil",
-        "pathlib",
-        "open",
-        "requests",
-        "urllib",
-        "mod",
-        "tdu",
-        "getattr",
-        "setattr",
-        "globals",
-        "locals",
-    )
-)
-_BAD_MODULE_NAMES = frozenset(
-    ("os", "sys", "subprocess", "socket", "shutil", "pathlib", "requests", "urllib")
-)
+_BAD_NAMES = frozenset((
+    "eval",
+    "exec",
+    "compile",
+    "__import__",
+    "os",
+    "sys",
+    "subprocess",
+    "socket",
+    "shutil",
+    "pathlib",
+    "open",
+    "requests",
+    "urllib",
+    "mod",
+    "tdu",
+    "getattr",
+    "setattr",
+    "globals",
+    "locals",
+))
+_BAD_MODULE_NAMES = frozenset(("os", "sys", "subprocess", "socket", "shutil", "pathlib", "requests", "urllib"))
 _BAD_ATTRS = frozenset(("run", "save", "store"))
 _DYNAMIC_ATTR_NAMES = frozenset(("getattr", "setattr", "globals", "locals"))
-_PATH_PARAM_NAMES = frozenset(
-    (
-        "file",
-        "syncfile",
-        "filepath",
-        "filename",
-        "folder",
-        "directory",
-        "dir",
-        "path",
-    )
-)
+_PATH_PARAM_NAMES = frozenset((
+    "file",
+    "syncfile",
+    "filepath",
+    "filename",
+    "folder",
+    "directory",
+    "dir",
+    "path",
+))
 _PATH_STYLES = frozenset(("File", "FileSave", "Folder"))
 _WINDOWS_ABS_RE = re.compile(r"^[A-Za-z]:[/\\]")
 
@@ -321,8 +315,27 @@ def _scan_execute_dat(op_data, op_path, op_type, state):
 # pixel DAT often carries `extension: 'frag'` with no `language` param, so extension
 # is a second signal beyond `language`.
 _NON_PYTHON_DAT_EXTENSIONS = frozenset((
-    "frag", "vert", "glsl", "comp", "geom", "tesc", "tese", "hlsl", "cg",
-    "txt", "json", "xml", "csv", "tsv", "md", "html", "htm", "css", "js", "yaml", "yml",
+    "frag",
+    "vert",
+    "glsl",
+    "comp",
+    "geom",
+    "tesc",
+    "tese",
+    "hlsl",
+    "cg",
+    "txt",
+    "json",
+    "xml",
+    "csv",
+    "tsv",
+    "md",
+    "html",
+    "htm",
+    "css",
+    "js",
+    "yaml",
+    "yml",
 ))
 
 
@@ -552,21 +565,51 @@ def _effective_parameters(op_data, type_defaults, op_type):
 # is handed it (by CollectionExt) to decide which expressions to neutralize.
 
 _PURE_ROOT_NAMES = frozenset((
-    "parent", "me", "op", "absTime", "math", "tdu", "ipar", "iop",
+    "parent",
+    "me",
+    "op",
+    "absTime",
+    "math",
+    "tdu",
+    "ipar",
+    "iop",
 ))
 # Bare-name builtins that are pure and never invoke a passed callable. Excludes
 # higher-order builtins (map/filter/sorted) that could invoke a smuggled callable.
 _PURE_BUILTINS = frozenset((
-    "abs", "round", "int", "float", "str", "bool", "len", "pow", "sum",
-    "divmod", "complex", "ord", "chr", "hex", "bin", "min", "max",
+    "abs",
+    "round",
+    "int",
+    "float",
+    "str",
+    "bool",
+    "len",
+    "pow",
+    "sum",
+    "divmod",
+    "complex",
+    "ord",
+    "chr",
+    "hex",
+    "bin",
+    "min",
+    "max",
     # hasattr returns a bool (read-only introspection, cannot leak a callable the
     # way getattr can), so it is safe; getattr/setattr stay rejected.
     "hasattr",
 ))
 # tdu helpers that are pure value math. Conservative; extend deliberately.
 _TDU_VALUE_HELPERS = frozenset((
-    "remap", "clamp", "Color", "Vector", "Position", "Quaternion", "Matrix",
-    "rgbToHsv", "hsvToRgb", "legalName",
+    "remap",
+    "clamp",
+    "Color",
+    "Vector",
+    "Position",
+    "Quaternion",
+    "Matrix",
+    "rgbToHsv",
+    "hsvToRgb",
+    "legalName",
 ))
 # Attribute names that open an execution / mutation surface -> never a pure read.
 _FORBIDDEN_PURE_ATTRS = frozenset(("module", "mod", "storage"))
@@ -608,8 +651,7 @@ def _expr_is_pure(node):
     if t in (ast.Tuple, ast.List, ast.Set):
         return all(_expr_is_pure(e) for e in node.elts)
     if t is ast.Dict:
-        return (all(k is None or _expr_is_pure(k) for k in node.keys)
-                and all(_expr_is_pure(v) for v in node.values))
+        return all(k is None or _expr_is_pure(k) for k in node.keys) and all(_expr_is_pure(v) for v in node.values)
     if t is ast.Subscript:
         return _expr_is_pure(node.value) and _expr_slice_is_pure(node.slice)
     if t is ast.Name:
@@ -645,9 +687,9 @@ def _expr_call_is_pure(node):
         return func.id in _PURE_BUILTINS or func.id in ("parent", "op")
     if isinstance(func, ast.Attribute):
         recv = func.value
-        if func.attr == "eval":           # Par.eval() / value-eval on a pure receiver
+        if func.attr == "eval":  # Par.eval() / value-eval on a pure receiver
             return _expr_is_pure(recv)
-        if isinstance(recv, ast.Name) and recv.id == "math":   # math.* is all pure
+        if isinstance(recv, ast.Name) and recv.id == "math":  # math.* is all pure
             return True
         if isinstance(recv, ast.Name) and recv.id == "tdu" and func.attr in _TDU_VALUE_HELPERS:
             return True

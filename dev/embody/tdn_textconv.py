@@ -37,6 +37,7 @@ import sys
 
 try:
     import yaml
+
     _HAVE_YAML = True
 except Exception:
     _HAVE_YAML = False
@@ -47,8 +48,14 @@ except Exception:
 # v1.5->v2.0 format bump does not churn the diff, and 'source_file' is dropped
 # across the migration boundary. Do NOT 'sync' this to equality with
 # _TDN_VOLATILE_KEYS -- the broader set is correct by intent.
-VOLATILE_KEYS = ('build', 'generator', 'td_build', 'exported_at',
-                 'source_file', 'version')
+VOLATILE_KEYS = (
+    "build",
+    "generator",
+    "td_build",
+    "exported_at",
+    "source_file",
+    "version",
+)
 
 
 if _HAVE_YAML:
@@ -64,19 +71,16 @@ if _HAVE_YAML:
 
     class _TDNYamlDumper(_BaseDumper):
         """Private subclass so TDN representers never leak into SafeDumper."""
+
         pass
 
     def _tdn_str_representer(dumper, data):
-        style = '|' if '\n' in data else None
-        return dumper.represent_scalar('tag:yaml.org,2002:str', data,
-                                       style=style)
+        style = "|" if "\n" in data else None
+        return dumper.represent_scalar("tag:yaml.org,2002:str", data, style=style)
 
     def _tdn_list_representer(dumper, data):
-        flow = (len(data) <= 4
-                and all(isinstance(x, (int, float)) and not isinstance(x, bool)
-                        for x in data))
-        return dumper.represent_sequence('tag:yaml.org,2002:seq', data,
-                                         flow_style=flow)
+        flow = len(data) <= 4 and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in data)
+        return dumper.represent_sequence("tag:yaml.org,2002:seq", data, flow_style=flow)
 
     _TDNYamlDumper.add_representer(str, _tdn_str_representer)
     _TDNYamlDumper.add_representer(list, _tdn_list_representer)
@@ -89,8 +93,8 @@ def _parse(raw):
     so a BOM-prefixed legacy JSON blob does not fall through to a YAML parse
     that would ScannerError on the tab indentation.
     """
-    stripped = raw.lstrip('﻿').lstrip()
-    if stripped[:1] in ('{', '['):
+    stripped = raw.lstrip("﻿").lstrip()
+    if stripped[:1] in ("{", "["):
         try:
             return json.loads(stripped)
         except json.JSONDecodeError:
@@ -106,9 +110,8 @@ def _normalize_dat_content(node):
     and what _setDATContent rejoins on import (lossless).
     """
     if isinstance(node, dict):
-        if (node.get('dat_content_format') == 'text'
-                and isinstance(node.get('dat_content'), list)):
-            node['dat_content'] = '\n'.join(node['dat_content'])
+        if node.get("dat_content_format") == "text" and isinstance(node.get("dat_content"), list):
+            node["dat_content"] = "\n".join(node["dat_content"])
         for value in node.values():
             _normalize_dat_content(value)
     elif isinstance(node, list):
@@ -138,18 +141,17 @@ def normalize(raw):
     # _TDNYamlDumper (block scalars, short-numeric list flow, sort_keys=False).
     # Both sides of a diff pass through this identical normalization.
     try:
-        out = yaml.dump(doc, Dumper=_TDNYamlDumper, sort_keys=False,
-                        width=4096, allow_unicode=True)
+        out = yaml.dump(doc, Dumper=_TDNYamlDumper, sort_keys=False, width=4096, allow_unicode=True)
     except Exception:
         return raw
-    return out if out.endswith('\n') else out + '\n'
+    return out if out.endswith("\n") else out + "\n"
 
 
 def main(argv):
     if len(argv) < 2:
         return 0
     try:
-        with open(argv[1], 'r', encoding='utf-8') as f:
+        with open(argv[1], "r", encoding="utf-8") as f:
             raw = f.read()
     except OSError:
         return 0
@@ -157,5 +159,5 @@ def main(argv):
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main(sys.argv))

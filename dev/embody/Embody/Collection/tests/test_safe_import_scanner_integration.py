@@ -9,6 +9,7 @@ Presence-only surfaces (an Execute DAT's kept-but-inactive content, a bypassed I
 bypassed op's constant traversal path, external_refs) legitimately remain - they do not auto-run,
 and the capability summary should still show them. ASCII only.
 """
+
 import os
 import sys
 import unittest

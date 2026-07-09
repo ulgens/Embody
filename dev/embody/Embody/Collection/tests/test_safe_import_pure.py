@@ -7,6 +7,7 @@ tdu/GLSL false positives), Script-OP + tox_ref disarming, and purity-aware is_in
 
 Pure unittest, no TD imports. Run: python3 -m unittest tests.test_safe_import_pure
 """
+
 import os
 import sys
 import unittest
@@ -21,8 +22,12 @@ PURE = scanner.is_pure_value_expression
 
 def tdn(operators=None, **extra):
     t = {
-        "format": "tdn", "version": "2.0", "generator": "test",
-        "td_build": "099.2025.32820", "network_path": "/p", "type": "baseCOMP",
+        "format": "tdn",
+        "version": "2.0",
+        "generator": "test",
+        "td_build": "099.2025.32820",
+        "network_path": "/p",
+        "type": "baseCOMP",
         "operators": operators or [],
     }
     t.update(extra)
@@ -75,14 +80,22 @@ class TestPurityValidator(unittest.TestCase):
 
 class TestMakeInertPreservesPure(unittest.TestCase):
     def _glsl(self):
-        return tdn([{
-            "name": "g", "type": "glslTOP",
-            "sequences": {"vec": [
-                {"name": "uP", "valuex": "=parent().par.Power.eval()",
-                 "valuey": "=absTime.seconds"},
-            ]},
-            "parameters": {"resolutionw": "=op('v').destroy()"},
-        }])
+        return tdn([
+            {
+                "name": "g",
+                "type": "glslTOP",
+                "sequences": {
+                    "vec": [
+                        {
+                            "name": "uP",
+                            "valuex": "=parent().par.Power.eval()",
+                            "valuey": "=absTime.seconds",
+                        },
+                    ]
+                },
+                "parameters": {"resolutionw": "=op('v').destroy()"},
+            }
+        ])
 
     def test_pure_sequence_exprs_preserved_dangerous_neutralized(self):
         inert, summary = safe_import.make_inert(self._glsl(), is_pure_expr=PURE)
@@ -100,23 +113,35 @@ class TestMakeInertPreservesPure(unittest.TestCase):
         self.assertEqual(summary["exprs_neutralized"], 3)
 
     def test_custom_par_default_and_menusource_gated(self):
-        t = tdn([{
-            "name": "b", "type": "baseCOMP",
-            "custom_pars": {"P": [
-                {"name": "A", "style": "Float", "value": "=parent().par.X.eval()"},
-                {"name": "B", "style": "Float", "default": "=op('v').destroy()"},
-            ]},
-        }])
+        t = tdn([
+            {
+                "name": "b",
+                "type": "baseCOMP",
+                "custom_pars": {
+                    "P": [
+                        {
+                            "name": "A",
+                            "style": "Float",
+                            "value": "=parent().par.X.eval()",
+                        },
+                        {
+                            "name": "B",
+                            "style": "Float",
+                            "default": "=op('v').destroy()",
+                        },
+                    ]
+                },
+            }
+        ])
         inert, _ = safe_import.make_inert(t, is_pure_expr=PURE)
         defs = inert["operators"][0]["custom_pars"]["P"]
         self.assertEqual(defs[0]["value"], "=parent().par.X.eval()")  # pure preserved
-        self.assertEqual(defs[1]["default"], 0)                        # dangerous gone
+        self.assertEqual(defs[1]["default"], 0)  # dangerous gone
 
 
 class TestScannerExpressionPurity(unittest.TestCase):
     def _flagged_expr(self, expr):
-        return scanner.scan_tdn(tdn([
-            {"name": "l", "type": "levelTOP", "parameters": {"opacity": expr}}]))
+        return scanner.scan_tdn(tdn([{"name": "l", "type": "levelTOP", "parameters": {"opacity": expr}}]))
 
     def test_pure_param_exprs_do_not_flag(self):
         for s in BENIGN:
@@ -129,30 +154,56 @@ class TestScannerExpressionPurity(unittest.TestCase):
             self.assertGreaterEqual(res["counts"]["file_read_exprs"], 1, "missed: %s" % s)
 
     def test_par_eval_idiom_scans_clean(self):
-        res = scanner.scan_tdn(tdn([
-            {"name": "g", "type": "glslTOP",
-             "sequences": {"vec": [{"name": "u", "valuex": "=parent().par.Power.eval()"}]}}]))
+        res = scanner.scan_tdn(
+            tdn([
+                {
+                    "name": "g",
+                    "type": "glslTOP",
+                    "sequences": {"vec": [{"name": "u", "valuex": "=parent().par.Power.eval()"}]},
+                }
+            ])
+        )
         self.assertEqual(res["verdict"], "clean")
 
 
 class TestScannerGlslAndData(unittest.TestCase):
     def test_glsl_textdat_by_language_not_python(self):
-        res = scanner.scan_tdn(tdn([
-            {"name": "px", "type": "textDAT", "parameters": {"language": "glsl"},
-             "dat_content": "uniform vec4 u;\nvoid main(){ }"}]))
+        res = scanner.scan_tdn(
+            tdn([
+                {
+                    "name": "px",
+                    "type": "textDAT",
+                    "parameters": {"language": "glsl"},
+                    "dat_content": "uniform vec4 u;\nvoid main(){ }",
+                }
+            ])
+        )
         self.assertEqual(res["counts"]["execute_dats"], 0)
         self.assertEqual(res["verdict"], "clean")
 
     def test_glsl_textdat_by_extension_not_python(self):
-        res = scanner.scan_tdn(tdn([
-            {"name": "px", "type": "textDAT", "parameters": {"extension": "frag"},
-             "dat_content": "// shader\nuniform vec4 u; void main(){}"}]))
+        res = scanner.scan_tdn(
+            tdn([
+                {
+                    "name": "px",
+                    "type": "textDAT",
+                    "parameters": {"extension": "frag"},
+                    "dat_content": "// shader\nuniform vec4 u; void main(){}",
+                }
+            ])
+        )
         self.assertEqual(res["counts"]["execute_dats"], 0)
 
     def test_python_textdat_with_import_still_flags(self):
-        res = scanner.scan_tdn(tdn([
-            {"name": "code", "type": "textDAT",
-             "dat_content": "import os\nos.system('id')"}]))
+        res = scanner.scan_tdn(
+            tdn([
+                {
+                    "name": "code",
+                    "type": "textDAT",
+                    "dat_content": "import os\nos.system('id')",
+                }
+            ])
+        )
         self.assertGreaterEqual(res["counts"]["execute_dats"], 1)
 
 
@@ -163,8 +214,7 @@ class TestScannerAndInertScriptOps(unittest.TestCase):
         self.assertEqual(res["verdict"], "flagged")
 
     def test_script_op_is_bypassed(self):
-        inert, summary = safe_import.make_inert(
-            tdn([{"name": "s", "type": "scriptCHOP"}]), is_pure_expr=PURE)
+        inert, summary = safe_import.make_inert(tdn([{"name": "s", "type": "scriptCHOP"}]), is_pure_expr=PURE)
         self.assertIn("bypass", inert["operators"][0].get("flags", []))
         self.assertEqual(summary["script_ops_bypassed"], 1)
 
@@ -176,15 +226,22 @@ class TestToxRef(unittest.TestCase):
 
     def test_tox_ref_stripped_by_make_inert(self):
         inert, summary = safe_import.make_inert(
-            tdn([{"name": "c", "type": "baseCOMP", "tox_ref": "x.tox"}]), is_pure_expr=PURE)
+            tdn([{"name": "c", "type": "baseCOMP", "tox_ref": "x.tox"}]),
+            is_pure_expr=PURE,
+        )
         self.assertNotIn("tox_ref", inert["operators"][0])
         self.assertEqual(summary["external_refs_stripped"], 1)
 
 
 class TestIsInertPurityAware(unittest.TestCase):
     def _pure_net(self):
-        return tdn([{"name": "l", "type": "levelTOP",
-                     "parameters": {"opacity": "=parent().par.X.eval()"}}])
+        return tdn([
+            {
+                "name": "l",
+                "type": "levelTOP",
+                "parameters": {"opacity": "=parent().par.X.eval()"},
+            }
+        ])
 
     def test_pure_net_is_inert_with_predicate(self):
         self.assertTrue(safe_import.is_inert(self._pure_net(), is_pure_expr=PURE))
@@ -193,8 +250,13 @@ class TestIsInertPurityAware(unittest.TestCase):
         self.assertFalse(safe_import.is_inert(self._pure_net()))
 
     def test_dangerous_net_not_inert_even_with_predicate(self):
-        net = tdn([{"name": "l", "type": "levelTOP",
-                    "parameters": {"opacity": "=op('v').destroy()"}}])
+        net = tdn([
+            {
+                "name": "l",
+                "type": "levelTOP",
+                "parameters": {"opacity": "=op('v').destroy()"},
+            }
+        ])
         self.assertFalse(safe_import.is_inert(net, is_pure_expr=PURE))
 
     def test_make_inert_result_is_inert(self):
@@ -207,8 +269,11 @@ class TestPaletteTrust(unittest.TestCase):
     FOREIGN = "op('./Evil').module.Evil(me)"
 
     def _comp_with_ext(self, obj, **node_extra):
-        node = {"name": "c", "type": "annotateCOMP",
-                "sequences": {"ext": [{"object": obj, "name": "E", "promote": True}]}}
+        node = {
+            "name": "c",
+            "type": "annotateCOMP",
+            "sequences": {"ext": [{"object": obj, "name": "E", "promote": True}]},
+        }
         node.update(node_extra)
         return tdn([node])
 
@@ -234,8 +299,13 @@ class TestPaletteTrust(unittest.TestCase):
         self.assertNotIn("opshortcut", inert["operators"][0].get("parameters", {}))
 
     def test_scoped_parentshortcut_is_kept(self):
-        node = tdn([{"name": "c", "type": "baseCOMP",
-                     "parameters": {"parentshortcut": "Scene"}}])
+        node = tdn([
+            {
+                "name": "c",
+                "type": "baseCOMP",
+                "parameters": {"parentshortcut": "Scene"},
+            }
+        ])
         inert, summary = safe_import.make_inert(node, is_pure_expr=PURE)
         self.assertEqual(summary["global_shortcuts_stripped"], 0)
         self.assertEqual(inert["operators"][0]["parameters"]["parentshortcut"], "Scene")

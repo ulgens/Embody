@@ -12,6 +12,7 @@ Regenerate after changing Embody's parameters (then commit the result):
 
 It writes docs/embody/parameters.md. ASCII punctuation only (repo rule).
 """
+
 import os
 import sys
 
@@ -28,12 +29,26 @@ OUT_PATH = os.path.join(REPO, "docs", "embody", "parameters.md")
 
 # Normalize non-ASCII punctuation to ASCII (repo rule: generated files stay ASCII).
 _ASCII = {
-    0x2014: "-", 0x2013: "-", 0x2012: "-", 0x2015: "-",  # dashes
-    0x2018: "'", 0x2019: "'", 0x201A: "'", 0x201B: "'",  # single quotes
-    0x201C: '"', 0x201D: '"', 0x201E: '"',               # double quotes
-    0x2026: "...", 0x2022: "*", 0x00A0: " ",              # ellipsis, bullet, nbsp
-    0x2192: "->", 0x2190: "<-", 0x2194: "<->", 0x00D7: "x",
-    0x2265: ">=", 0x2264: "<=",
+    0x2014: "-",
+    0x2013: "-",
+    0x2012: "-",
+    0x2015: "-",  # dashes
+    0x2018: "'",
+    0x2019: "'",
+    0x201A: "'",
+    0x201B: "'",  # single quotes
+    0x201C: '"',
+    0x201D: '"',
+    0x201E: '"',  # double quotes
+    0x2026: "...",
+    0x2022: "*",
+    0x00A0: " ",  # ellipsis, bullet, nbsp
+    0x2192: "->",
+    0x2190: "<-",
+    0x2194: "<->",
+    0x00D7: "x",
+    0x2265: ">=",
+    0x2264: "<=",
 }
 
 
@@ -114,14 +129,11 @@ def main():
         "Regenerate with: python dev/embody/tools/generate_parameters_doc.py -->"
     )
     lines.append("")
-    lines.append(
-        "!!! info \"Auto-generated from `Embody.tdn`\""
-    )
+    lines.append('!!! info "Auto-generated from `Embody.tdn`"')
     lines.append(
         "    This page is generated from the externalized Embody COMP "
         "(`dev/embody/Embody.tdn`), the source of truth for its parameters, so it "
-        "stays in sync with the actual component. **%d parameters** across %d pages."
-        % (total, len(pages))
+        "stays in sync with the actual component. **%d parameters** across %d pages." % (total, len(pages))
     )
     lines.append("")
 

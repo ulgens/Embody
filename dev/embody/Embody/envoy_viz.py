@@ -38,36 +38,36 @@ import random
 # their view as the new baseline and (re)arms an idle cooldown -- so we resume
 # only after they stop, never give up forever, never yank them mid-interaction.
 
-_VIZ_EASE = 0.4         # fraction of the remaining distance covered per frame (snappy -> stays on Embot)
-_VIZ_EPS = 1.0          # network units; closer than this -> snap and release
-_VIZ_TAKEOVER_S = 6.0   # seconds to yield after the user's last interaction
-_VIZ_ZOOM = 0.55        # framing zoom while following -- zoomed out for context
-_VIZ_TAKEOVER_PAN = 12.0   # min pan (network units) that counts as a user takeover
+_VIZ_EASE = 0.4  # fraction of the remaining distance covered per frame (snappy -> stays on Embot)
+_VIZ_EPS = 1.0  # network units; closer than this -> snap and release
+_VIZ_TAKEOVER_S = 6.0  # seconds to yield after the user's last interaction
+_VIZ_ZOOM = 0.55  # framing zoom while following -- zoomed out for context
+_VIZ_TAKEOVER_PAN = 12.0  # min pan (network units) that counts as a user takeover
 _VIZ_TAKEOVER_ZOOM = 0.08  # min zoom change that counts as a user takeover
-_VIZ_IDLE_S = 30.0      # seconds of quiet before the bot + pulse retire (survives thinking pauses)
-_VIZ_PULSE_S = 0.45     # seconds for a node's colour pulse to fade back
-_VIZ_PULSE_COLOR = (0.15, 0.85, 0.70)    # Envoy accent (cyan-green)
+_VIZ_IDLE_S = 30.0  # seconds of quiet before the bot + pulse retire (survives thinking pauses)
+_VIZ_PULSE_S = 0.45  # seconds for a node's colour pulse to fade back
+_VIZ_PULSE_COLOR = (0.15, 0.85, 0.70)  # Envoy accent (cyan-green)
 # The builder-bot is a little figure of 8 minimal networkbox annotations
 # (no text header) -- head, 2 eyes, body, 2 arms, 2 legs. Each part:
 # (suffix, centre-offset-x, centre-offset-y, base-w, base-h, is_eye).
 # Offsets are network units from the figure's anchor (y up). Body first so
 # later parts (head, eyes) draw on top.
-_VIZ_BOT_PREFIX = 'envoy_bot_'
+_VIZ_BOT_PREFIX = "envoy_bot_"
 _VIZ_BOT_PARTS = (
-    ('body',   0.0,    0.0,   30.0, 34.0, False),
-    ('arm_l', -22.0,   3.0,    9.0, 26.0, False),
-    ('arm_r',  22.0,   3.0,    9.0, 26.0, False),
-    ('leg_l',  -8.0,  -29.0,  11.0, 24.0, False),
-    ('leg_r',   8.0,  -29.0,  11.0, 24.0, False),
-    ('head',   0.0,   31.0,   34.0, 26.0, False),
-    ('eye_l',  -8.0,  35.0,   12.0, 13.0, True),
-    ('eye_r',   8.0,  35.0,   12.0, 13.0, True),
+    ("body", 0.0, 0.0, 30.0, 34.0, False),
+    ("arm_l", -22.0, 3.0, 9.0, 26.0, False),
+    ("arm_r", 22.0, 3.0, 9.0, 26.0, False),
+    ("leg_l", -8.0, -29.0, 11.0, 24.0, False),
+    ("leg_r", 8.0, -29.0, 11.0, 24.0, False),
+    ("head", 0.0, 31.0, 34.0, 26.0, False),
+    ("eye_l", -8.0, 35.0, 12.0, 13.0, True),
+    ("eye_r", 8.0, 35.0, 12.0, 13.0, True),
 )
 # Robotic motion: the figure JUMPS from node to node (parabolic arc, snappy
 # ease) and does a small stepped hover when idle. Squash is subtle and only
 # applied on landing.
-_VIZ_JUMP_DUR = 0.52      # seconds per hop between nodes
-_VIZ_JUMP_ARC = 55.0      # hop arc height (network units)
+_VIZ_JUMP_DUR = 0.52  # seconds per hop between nodes
+_VIZ_JUMP_ARC = 55.0  # hop arc height (network units)
 # Off-view assembly. Copying an annotateCOMP into a net you're VIEWING costs ~280ms
 # (the in-viewport redraw); copying it OUTSIDE the viewport costs ~100ms (verified).
 # So on an on-screen spawn Embot assembles at a staging point parked just past the
@@ -75,15 +75,15 @@ _VIZ_JUMP_ARC = 55.0      # hop arc height (network units)
 # shallower fps sag) and the user sees a clean entrance instead of a stuttering
 # build. _VIZ_STAGE_MARGIN is how far past the viewport edge to park; the swoop home
 # uses _VIZ_ENTRANCE_DUR (slower than a normal hop, since it covers a big distance).
-_VIZ_STAGE_MARGIN = 700.0   # network units past the viewport edge for the staging point
-_VIZ_ENTRANCE_DUR = 0.95    # seconds for the swoop-in from staging (vs _VIZ_JUMP_DUR hops)
+_VIZ_STAGE_MARGIN = 700.0  # network units past the viewport edge for the staging point
+_VIZ_ENTRANCE_DUR = 0.95  # seconds for the swoop-in from staging (vs _VIZ_JUMP_DUR hops)
 # Stepping cadence: how long Embot dwells on each queued op before advancing to
 # the next. >= the jump so a hop lands before the next begins. When the queue
 # backs up (a fat batch) the dwell shrinks toward _VIZ_HOP_MIN so he races to
 # catch the wave -- but every op still gets its own visible hop, never skipped.
-_VIZ_HOP_DWELL = 0.8      # base dwell per hop (queue empty)
-_VIZ_HOP_MIN = 0.32       # floor dwell when the queue is deep
-_VIZ_QUEUE_CAP = 24       # hard cap on pending hops (drop oldest beyond this)
+_VIZ_HOP_DWELL = 0.8  # base dwell per hop (queue empty)
+_VIZ_HOP_MIN = 0.32  # floor dwell when the queue is deep
+_VIZ_QUEUE_CAP = 24  # hard cap on pending hops (drop oldest beyond this)
 # On-screen spawn pacing. Copying ONE annotateCOMP into a net you are LOOKING AT
 # forces a ~70ms annotation-layer redraw -- a single dropped frame that cannot be
 # made cheaper (the cost is the editor relayout, not the copy; verified by stripping
@@ -93,42 +93,51 @@ _VIZ_QUEUE_CAP = 24       # hard cap on pending hops (drop oldest beyond this)
 # each hitch (smooth motion between them) so assembly reads as "building himself".
 # Off-screen spawns use one fast block copy and ignore this entirely -- only the
 # on-screen spread is gated. Higher = smoother but slower to finish assembling.
-_VIZ_ASSEMBLE_INTERVAL = 32     # frames between on-screen part copies (~0.53s @ 60fps)
+_VIZ_ASSEMBLE_INTERVAL = 32  # frames between on-screen part copies (~0.53s @ 60fps)
 # Build order for the on-screen spread: body + head + speech first so he is instantly
 # recognizable as "here", then limbs, then eyes -- never a half-built torso sitting
 # limbless for seconds. Names match _VIZ_BOT_PARTS suffixes (+ the speech bubble).
-_VIZ_ASSEMBLE_ORDER = ('body', 'head', 'speech', 'arm_l', 'arm_r',
-                       'leg_l', 'leg_r', 'eye_l', 'eye_r')
-_VIZ_HOVER_AMP = 3.0      # idle hover amplitude (network units)
-_VIZ_HOVER_FREQ = 3.0     # idle hover frequency
-_VIZ_SQUASH = 0.07        # landing squash amount (subtle)
+_VIZ_ASSEMBLE_ORDER = (
+    "body",
+    "head",
+    "speech",
+    "arm_l",
+    "arm_r",
+    "leg_l",
+    "leg_r",
+    "eye_l",
+    "eye_r",
+)
+_VIZ_HOVER_AMP = 3.0  # idle hover amplitude (network units)
+_VIZ_HOVER_FREQ = 3.0  # idle hover frequency
+_VIZ_SQUASH = 0.07  # landing squash amount (subtle)
 # Occasional happy squint -- eyes briefly flatten + spread, reading as a content
 # "^_^". Much rarer than the blink so it stays a gentle accent, not a tic. The
 # 10px annotate-size floor means a squint only reads if the eyes are tall enough
 # to flatten FROM -- hence the eyes are a bit bigger now (see _VIZ_BOT_PARTS).
-_VIZ_SQUINT_GAP_MIN = 9.0    # min seconds between squints
-_VIZ_SQUINT_GAP_MAX = 17.0   # max seconds between squints
-_VIZ_SQUINT_DUR = 1.1        # how long a squint holds
-_VIZ_SQUINT_FLATTEN = 0.74   # eye HEIGHT scale while squinting (toward the 10px floor)
-_VIZ_SQUINT_WIDEN = 1.18     # eye WIDTH scale while squinting (the smile spread)
+_VIZ_SQUINT_GAP_MIN = 9.0  # min seconds between squints
+_VIZ_SQUINT_GAP_MAX = 17.0  # max seconds between squints
+_VIZ_SQUINT_DUR = 1.1  # how long a squint holds
+_VIZ_SQUINT_FLATTEN = 0.74  # eye HEIGHT scale while squinting (toward the 10px floor)
+_VIZ_SQUINT_WIDEN = 1.18  # eye WIDTH scale while squinting (the smile spread)
 # Embot does an occasional gesture, cycling through several types so it stays
 # varied: a wave, an arms-up shrug, an arms-up pump, and -- now and then
 # -- a full-body robot dance. Any single gesture (incl. the wave) is therefore
 # infrequent.
 _VIZ_GESTURE_GAP_MIN = 4.0  # min seconds between gestures (randomized)
-_VIZ_GESTURE_GAP_MAX = 11.0 # max seconds between gestures
-_VIZ_GESTURE_DUR = 1.6      # how long a hand gesture lasts
-_VIZ_DANCE_DUR = 3.0        # the robot dance runs a bit longer
-_VIZ_WAVE_LIFT = 28.0       # how high the right arm raises to wave
-_VIZ_WAVE_FREQ = 14.0       # wiggle speed of the wave
-_VIZ_WAVE_AMP = 9.0         # wiggle amplitude of the wave
+_VIZ_GESTURE_GAP_MAX = 11.0  # max seconds between gestures
+_VIZ_GESTURE_DUR = 1.6  # how long a hand gesture lasts
+_VIZ_DANCE_DUR = 3.0  # the robot dance runs a bit longer
+_VIZ_WAVE_LIFT = 28.0  # how high the right arm raises to wave
+_VIZ_WAVE_FREQ = 14.0  # wiggle speed of the wave
+_VIZ_WAVE_AMP = 9.0  # wiggle amplitude of the wave
 # Colour reflects "thinking time" -- how long since the last build op. Cool
 # (cyan/blue) when Envoy just acted; warming through green/yellow to red the
 # longer it goes between actions (a heavier "thinking" gap). Resets cool on
 # each new op.
-_VIZ_WARM_S = 14.0        # seconds of thinking to ramp fully cool -> warm
-_VIZ_COOL_HUE = 0.58      # short/quick: cool blue-cyan
-_VIZ_WARM_HUE = 0.0       # long/thought-heavy: warm red
+_VIZ_WARM_S = 14.0  # seconds of thinking to ramp fully cool -> warm
+_VIZ_COOL_HUE = 0.58  # short/quick: cool blue-cyan
+_VIZ_WARM_HUE = 0.0  # long/thought-heavy: warm red
 
 # Operations that count as "building" and should move the camera. Read-only
 # ops (get_*, query_network, read_tdn, capture_top) and batch_operations
@@ -136,10 +145,18 @@ _VIZ_WARM_HUE = 0.0       # long/thought-heavy: warm red
 # excluded. delete_op is excluded too: the op is gone post-dispatch and a
 # deletion has no centre to frame.
 _VIZ_MUTATING_OPS = frozenset({
-    'create_op', 'import_network', 'connect_ops', 'copy_op',
-    'create_annotation', 'create_extension', 'set_parameter',
-    'set_op_position', 'set_dat_content', 'edit_dat_content',
-    'rename_op', 'set_op_flags',
+    "create_op",
+    "import_network",
+    "connect_ops",
+    "copy_op",
+    "create_annotation",
+    "create_extension",
+    "set_parameter",
+    "set_op_position",
+    "set_dat_content",
+    "edit_dat_content",
+    "rename_op",
+    "set_op_flags",
 })
 
 
@@ -172,7 +189,7 @@ def noteVizActivity(ext, operation: str, params: dict, result) -> None:
         else:
             q.append((target, caption))
             if len(q) > _VIZ_QUEUE_CAP:
-                del q[0]                      # bound the backlog; oldest gives way
+                del q[0]  # bound the backlog; oldest gives way
     except Exception:
         pass
 
@@ -184,14 +201,14 @@ def vizTick(ext) -> None:
     try:
         # Perform mode or the save window: tear everything down so nothing can
         # bake into the .toe (belt-and-suspenders with onProjectPreSave).
-        if getattr(ext.ownerComp.ext.Embody, '_performMode', False):
+        if getattr(ext.ownerComp.ext.Embody, "_performMode", False):
             vizCleanup(ext)
             return
-        if ext.ownerComp.fetch('_suppress_dialogs', False, search=False):
+        if ext.ownerComp.fetch("_suppress_dialogs", False, search=False):
             vizCleanup(ext)
             return
-        show_bot = ext.ownerComp.par.Embotenable.eval()   # render the character
-        follow = ext.ownerComp.par.Envoyfollow.eval()     # camera tracks the active op
+        show_bot = ext.ownerComp.par.Embotenable.eval()  # render the character
+        follow = ext.ownerComp.par.Envoyfollow.eval()  # camera tracks the active op
         if not show_bot and not follow:
             vizCleanup(ext)
             return
@@ -206,14 +223,14 @@ def vizTick(ext) -> None:
         if ext._viz_target_op:
             trackActive(ext, now, follow, show_bot)
         if show_bot:
-            cleanupDeadBots(ext)   # tear down a left-behind bot off-screen
-            assembleTick(ext)      # copy one template part per frame (no freeze)
+            cleanupDeadBots(ext)  # tear down a left-behind bot off-screen
+            assembleTick(ext)  # copy one template part per frame (no freeze)
             botDance(ext, now)
         elif ext._viz_bot_net:
-            destroyBot(ext)        # camera-only: ensure no character lingers
+            destroyBot(ext)  # camera-only: ensure no character lingers
     except Exception as e:
         try:
-            ext._log(f'Viz tick skipped: {type(e).__name__}: {e}', 'DEBUG')
+            ext._log(f"Viz tick skipped: {type(e).__name__}: {e}", "DEBUG")
         except Exception:
             pass
 
@@ -230,9 +247,8 @@ def vizPumpQueue(ext, now: float) -> None:
     path, caption = q.pop(0)
     ext._viz_target_op = path
     ext._viz_action_text = caption
-    dwell = _VIZ_HOP_DWELL - 0.05 * len(q)   # deeper backlog -> quicker steps
-    ext._viz_hop_until = now + (dwell if dwell > _VIZ_HOP_MIN
-                                else _VIZ_HOP_MIN)
+    dwell = _VIZ_HOP_DWELL - 0.05 * len(q)  # deeper backlog -> quicker steps
+    ext._viz_hop_until = now + (dwell if dwell > _VIZ_HOP_MIN else _VIZ_HOP_MIN)
 
 
 def trackActive(ext, now: float, follow: bool, show_bot: bool) -> None:
@@ -256,8 +272,8 @@ def trackActive(ext, now: float, follow: bool, show_bot: bool) -> None:
         return
     # --- the character (Embotenable) ---
     if show_bot:
-        pulseStart(ext, target, now)    # ping the node colour
-        placeBot(ext, net, target, now) # bring the dancing bot to the op
+        pulseStart(ext, target, now)  # ping the node colour
+        placeBot(ext, net, target, now)  # bring the dancing bot to the op
     # --- the camera (Envoyfollow) -- frames the op, bot-independent ---
     if not follow:
         return
@@ -267,8 +283,8 @@ def trackActive(ext, now: float, follow: bool, show_bot: bool) -> None:
     if net.path != ext._viz_follow_net:
         ext._viz_follow_net = net.path
         ext._viz_zoom_pending = True
-    highlightOp(ext, target)             # mark Envoy's focus (changes selection ->
-                                         # only when actually following)
+    highlightOp(ext, target)  # mark Envoy's focus (changes selection ->
+    # only when actually following)
     pane, navigate = pickFollowPane(ext, net)
     if pane is None:
         return
@@ -278,19 +294,20 @@ def trackActive(ext, now: float, follow: bool, show_bot: bool) -> None:
         glideStep(ext, pane, target)
 
 
-def pickFollowPane(ext, net: 'COMP'):
+def pickFollowPane(ext, net: "COMP"):
     """Choose the pane to follow `net` in, and whether it must be navigated.
     Prefers a network-editor pane already showing `net` (-> glide); else the
     current/first network-editor pane (-> navigate into net). Returns
     (pane, navigate_bool), or (None, False) if the user has taken over."""
     try:
-        neteditors = [p for p in ui.panes
-                      if str(p.type) == 'PaneType.NETWORKEDITOR']
+        neteditors = [p for p in ui.panes if str(p.type) == "PaneType.NETWORKEDITOR"]
         if not neteditors:
             return None, False
         netpath = net.path
-        pane = next((p for p in neteditors
-                     if p.owner is not None and p.owner.path == netpath), None)
+        pane = next(
+            (p for p in neteditors if p.owner is not None and p.owner.path == netpath),
+            None,
+        )
         navigate = False
         if pane is None:
             cur_id = ui.panes.current.id
@@ -312,18 +329,18 @@ def userTookOver(ext, pane) -> bool:
     of ever tracking him. Following him beats honouring a transient auto-frame; a
     real owner change (the user clicking into another network) still yields."""
     now = absTime.seconds
-    cur = viewTuple(ext, pane)               # (id, owner, x, y, zoom)
+    cur = viewTuple(ext, pane)  # (id, owner, x, y, zoom)
     if now < ext._viz_settle_until:
-        ext._viz_last_view = cur             # our navigate is still settling -> adopt
+        ext._viz_last_view = cur  # our navigate is still settling -> adopt
         return False
     lv = ext._viz_last_view
-    if lv and lv[0] == cur[0] and lv[1] != cur[1]:   # OWNER changed -> user navigated away
+    if lv and lv[0] == cur[0] and lv[1] != cur[1]:  # OWNER changed -> user navigated away
         ext._viz_takeover_until = now + _VIZ_TAKEOVER_S
-    ext._viz_last_view = cur                 # always re-baseline (no stale pan/zoom compare)
+    ext._viz_last_view = cur  # always re-baseline (no stale pan/zoom compare)
     return now < ext._viz_takeover_until
 
 
-def navigateAndFrame(ext, pane, net: 'COMP', target: 'OP') -> None:
+def navigateAndFrame(ext, pane, net: "COMP", target: "OP") -> None:
     """Cut `pane` into `net` and SNAP to frame `target` (coordinate spaces
     differ across networks, so gliding from the old view is meaningless).
     Releases the target -- subsequent same-network ops glide from here."""
@@ -341,7 +358,7 @@ def navigateAndFrame(ext, pane, net: 'COMP', target: 'OP') -> None:
     ext._viz_zoom_pending = True
 
 
-def glideStep(ext, pane, target: 'OP') -> None:
+def glideStep(ext, pane, target: "OP") -> None:
     """One frame of an ease toward the active OP's standing point -- the spot where
     Embot stands (op centre-x, top edge), computed from the OP so the camera follows
     whether or not the character is rendered. `target` is the CURRENT pump op (the
@@ -349,19 +366,19 @@ def glideStep(ext, pane, target: 'OP') -> None:
     has caught the op and nothing is left queued."""
     if ext._viz_zoom_pending:
         try:
-            pane.zoom = _VIZ_ZOOM   # undo TD's auto-frame zoom-in (once, sticks now)
+            pane.zoom = _VIZ_ZOOM  # undo TD's auto-frame zoom-in (once, sticks now)
         except Exception:
             pass
         ext._viz_zoom_pending = False
     cx = target.nodeX + target.nodeWidth / 2.0
-    cy = target.nodeY + target.nodeHeight + botFootGap(ext)   # Embot's standing centre
+    cy = target.nodeY + target.nodeHeight + botFootGap(ext)  # Embot's standing centre
     dx = cx - pane.x
     dy = cy - pane.y
     if abs(dx) < _VIZ_EPS and abs(dy) < _VIZ_EPS:
         pane.x = cx
         pane.y = cy
-        if not ext._viz_target_queue:   # on him AND nothing left to build/visit
-            ext._viz_target_op = None   # -> release the pane to the user
+        if not ext._viz_target_queue:  # on him AND nothing left to build/visit
+            ext._viz_target_op = None  # -> release the pane to the user
     else:
         pane.x = pane.x + dx * _VIZ_EASE
         pane.y = pane.y + dy * _VIZ_EASE
@@ -370,7 +387,7 @@ def glideStep(ext, pane, target: 'OP') -> None:
     recordView(ext, pane)
 
 
-def highlightOp(ext, target: 'OP') -> None:
+def highlightOp(ext, target: "OP") -> None:
     """Select + make-current the op being worked, so Envoy's focus is visibly
     marked. Only deselects the op WE previously highlighted -- the user's own
     selections elsewhere are left alone. Best-effort; never raises."""
@@ -389,7 +406,8 @@ def highlightOp(ext, target: 'OP') -> None:
 
 # --- colour pulse on the active op ---
 
-def pulseStart(ext, target: 'OP', now: float) -> None:
+
+def pulseStart(ext, target: "OP", now: float) -> None:
     """Begin a colour pulse on `target` (snapshot its colour first). No-op if
     we are already pulsing this op."""
     if ext._viz_pulse_op == target.path:
@@ -417,11 +435,13 @@ def pulseTick(ext, now: float) -> None:
         return
     ac = _VIZ_PULSE_COLOR
     og = ext._viz_pulse_orig or (0.67, 0.67, 0.67)
-    k = 1.0 - t   # accent weight fades to 0
+    k = 1.0 - t  # accent weight fades to 0
     try:
-        o.color = (og[0] + (ac[0] - og[0]) * k,
-                   og[1] + (ac[1] - og[1]) * k,
-                   og[2] + (ac[2] - og[2]) * k)
+        o.color = (
+            og[0] + (ac[0] - og[0]) * k,
+            og[1] + (ac[1] - og[1]) * k,
+            og[2] + (ac[2] - og[2]) * k,
+        )
     except Exception:
         restorePulse(ext)
 
@@ -442,16 +462,19 @@ def restorePulse(ext) -> None:
 
 # --- the dancing builder-bot (ephemeral annotation) ---
 
-def placeBot(ext, net: 'COMP', target: 'OP', now: float) -> None:
+
+def placeBot(ext, net: "COMP", target: "OP", now: float) -> None:
     """Ensure the figure exists in `net` and set its destination so it STANDS
     on top of the active op (feet on the node's top edge). A new node triggers
     a hop; a network change snaps. Motion + colour come from _botDance."""
     prev_net = ext._viz_bot_net
     if not ensureBot(ext, net):
         return
-    dest = (target.nodeX + target.nodeWidth / 2.0,
-            target.nodeY + target.nodeHeight + botFootGap(ext))
-    ext._viz_bot_dest = dest           # current op standing point (swoop target)
+    dest = (
+        target.nodeX + target.nodeWidth / 2.0,
+        target.nodeY + target.nodeHeight + botFootGap(ext),
+    )
+    ext._viz_bot_dest = dest  # current op standing point (swoop target)
     if ext._viz_bot_pos is None or prev_net != ext._viz_bot_net:
         ext._viz_jump_dur = _VIZ_JUMP_DUR
         if ext._viz_bot_build_queue:
@@ -471,26 +494,25 @@ def placeBot(ext, net: 'COMP', target: 'OP', now: float) -> None:
             ext._viz_bot_from = dest
             ext._viz_bot_target = dest
             ext._viz_bot_pending_entrance = False
-        ext._viz_bot_jump_t0 = now - ext._viz_jump_dur   # already standing
+        ext._viz_bot_jump_t0 = now - ext._viz_jump_dur  # already standing
         return
     if ext._viz_bot_build_queue:
-        return                          # still assembling off-view -> hold at staging
+        return  # still assembling off-view -> hold at staging
     if dest != ext._viz_bot_target:
         ext._viz_jump_dur = _VIZ_JUMP_DUR
-        ext._viz_bot_from = ext._viz_bot_pos    # hop from where we are now
+        ext._viz_bot_from = ext._viz_bot_pos  # hop from where we are now
         ext._viz_bot_target = dest
         ext._viz_bot_jump_t0 = now
 
 
-def stageOffset(ext, net: 'COMP') -> float:
+def stageOffset(ext, net: "COMP") -> float:
     """Network-units to the RIGHT of the active op to park Embot while he assembles,
     so his per-part copies render OUTSIDE the viewport (cheap) instead of inside it.
     Derived from the viewing pane's zoom so it always clears the right edge; falls
     back to a generous fixed value if no pane is found."""
     try:
         for p in ui.panes:
-            if str(p.type) == 'PaneType.NETWORKEDITOR' and \
-                    p.owner is not None and p.owner.path == net.path:
+            if str(p.type) == "PaneType.NETWORKEDITOR" and p.owner is not None and p.owner.path == net.path:
                 return (ui.windowWidth / 2.0) / max(p.zoom, 0.05) + _VIZ_STAGE_MARGIN
     except Exception:
         pass
@@ -513,25 +535,24 @@ def ensureTemplate(ext):
     animated/live bot, so _botUnsafeNet (which forbids a LIVE bot here) is moot."""
     try:
         host = ext.ownerComp
-        tmpl = host.op('embot_template')
-        if tmpl and tmpl.op(_VIZ_BOT_PREFIX + 'body') and \
-                tmpl.op(_VIZ_BOT_PREFIX + 'speech'):
+        tmpl = host.op("embot_template")
+        if tmpl and tmpl.op(_VIZ_BOT_PREFIX + "body") and tmpl.op(_VIZ_BOT_PREFIX + "speech"):
             return tmpl
         if tmpl:
-            tmpl.destroy()                  # partial/stale -> rebuild clean
-        ext._crashTrace('ensureTemplate BUILD (creating annotateCOMPs)')
-        tmpl = host.create(baseCOMP, 'embot_template')
-        tmpl.nodeX, tmpl.nodeY = -1400, -1400   # parked out of the way
+            tmpl.destroy()  # partial/stale -> rebuild clean
+        ext._crashTrace("ensureTemplate BUILD (creating annotateCOMPs)")
+        tmpl = host.create(baseCOMP, "embot_template")
+        tmpl.nodeX, tmpl.nodeY = -1400, -1400  # parked out of the way
         skin = colorsys.hsv_to_rgb(_VIZ_COOL_HUE, 0.95, 1.0)  # default cool
-        for (suffix, ox, oy, w, h, is_eye) in _VIZ_BOT_PARTS:
+        for suffix, ox, oy, w, h, is_eye in _VIZ_BOT_PARTS:
             p = tmpl.create(annotateCOMP)
             p.name = _VIZ_BOT_PREFIX + suffix
             p.selected = False
-            p.par.Mode = 'networkbox'
-            p.par.Titletext = ''
-            p.par.Bodytext = ''
+            p.par.Mode = "networkbox"
+            p.par.Titletext = ""
+            p.par.Bodytext = ""
             try:
-                p.par.Titleheight = 0       # minimal box -- no text header
+                p.par.Titleheight = 0  # minimal box -- no text header
             except Exception:
                 pass
             p.par.Backcoloralpha = 1.0
@@ -541,11 +562,11 @@ def ensureTemplate(ext):
                 p.par.Backcolorr, p.par.Backcolorg, p.par.Backcolorb = skin
             p.nodeWidth = w
             p.nodeHeight = h
-        sp = tmpl.create(annotateCOMP)      # the speech bubble (titled)
-        sp.name = _VIZ_BOT_PREFIX + 'speech'
+        sp = tmpl.create(annotateCOMP)  # the speech bubble (titled)
+        sp.name = _VIZ_BOT_PREFIX + "speech"
         sp.selected = False
-        sp.par.Titletext = 'Embot'
-        sp.par.Bodytext = ''
+        sp.par.Titletext = "Embot"
+        sp.par.Bodytext = ""
         sp.par.Backcolorr = 0.12
         sp.par.Backcolorg = 0.12
         sp.par.Backcolorb = 0.17
@@ -558,7 +579,7 @@ def ensureTemplate(ext):
         return None
 
 
-def ensureBot(ext, net: 'COMP') -> bool:
+def ensureBot(ext, net: "COMP") -> bool:
     """Ensure Embot is present (or assembling) in `net`. On a network change he is
     COPIED from the template ONE PART PER FRAME (see _assembleTick) rather than in
     a single block copyOPs. This per-frame spread is the version that ran stably
@@ -566,22 +587,22 @@ def ensureBot(ext, net: 'COMP') -> bool:
     crashes and was reverted. Returns False where a bot must not live."""
     netpath = net.path
     if ext._viz_bot_net == netpath:
-        return True                         # already here (assembled or assembling)
+        return True  # already here (assembled or assembling)
     if botUnsafeNet(ext, net):
         return False
-    ext._crashTrace('ensureBot NET-CHANGE %s -> %s' % (ext._viz_bot_net, netpath))
+    ext._crashTrace("ensureBot NET-CHANGE %s -> %s" % (ext._viz_bot_net, netpath))
     if ensureTemplate(ext) is None:
         return False
     # Defer teardown of the bot we're LEAVING (destroying ops from an on-screen net
     # forces a redraw per op); tear it down a frame later, off-screen.
     if ext._viz_bot_net and ext._viz_bot_net != netpath:
         ext._viz_bot_pending_cleanup.add(ext._viz_bot_net)
-    ext._viz_bot_pending_cleanup.discard(netpath)   # re-entering -> keep its parts
+    ext._viz_bot_pending_cleanup.discard(netpath)  # re-entering -> keep its parts
     ext._viz_bot_pos = None
     ext._viz_bot_from = None
     ext._viz_bot_target = None
     ext._viz_bot_net = netpath
-    ext._viz_last_skin = None              # force a recolour onto the new parts
+    ext._viz_last_skin = None  # force a recolour onto the new parts
     # FAST + SAFE spawn. A single copyOPs of all 9 parts HARD-CRASHES TD when the
     # target net is ON-SCREEN (instantiating many annotateCOMPs concurrent with the
     # editor redraw -- pinpointed via crash trace: TD died inside copyOPs). But it
@@ -597,9 +618,8 @@ def ensureBot(ext, net: 'COMP') -> bool:
         # hitches stay isolated instead of fusing into a freeze. Order is body/head/
         # speech first (recognizable immediately), then limbs, then eyes.
         valid = {s for (s, _ox, _oy, _w, _h, _e) in _VIZ_BOT_PARTS}
-        valid.add('speech')
-        ext._viz_bot_build_queue = [_VIZ_BOT_PREFIX + s
-                                    for s in _VIZ_ASSEMBLE_ORDER if s in valid]
+        valid.add("speech")
+        ext._viz_bot_build_queue = [_VIZ_BOT_PREFIX + s for s in _VIZ_ASSEMBLE_ORDER if s in valid]
         # Copy nothing yet -- _placeBot (runs right after this, same frame) computes the
         # off-view staging point, then _assembleTick copies the parts there. Copying
         # part #1 here would land it in-view (staging not set) and pay the full cost.
@@ -611,7 +631,7 @@ def ensureBot(ext, net: 'COMP') -> bool:
     return True
 
 
-def netIsDisplayed(ext, net: 'COMP') -> bool:
+def netIsDisplayed(ext, net: "COMP") -> bool:
     """True if any network-editor pane currently shows `net` -- i.e. a block copy
     into it would redraw the editor and crash TD. Called BEFORE the follow's
     navigate, so a net we are about to dive into reads False (still off-screen).
@@ -619,15 +639,14 @@ def netIsDisplayed(ext, net: 'COMP') -> bool:
     try:
         np = net.path
         for p in ui.panes:
-            if str(p.type) == 'PaneType.NETWORKEDITOR' and \
-                    p.owner is not None and p.owner.path == np:
+            if str(p.type) == "PaneType.NETWORKEDITOR" and p.owner is not None and p.owner.path == np:
                 return True
     except Exception:
         return True
     return False
 
 
-def blockSpawn(ext, net: 'COMP') -> None:
+def blockSpawn(ext, net: "COMP") -> None:
     """Copy ALL 9 parts into `net` in ONE copyOPs (~180ms, one frame -- vs the
     ~9-frame, ~464ms spread). ONLY called by _ensureBot when `net` is OFF-SCREEN
     (a sub-COMP we are about to navigate into): copyOPs of many annotateCOMPs into
@@ -638,39 +657,37 @@ def blockSpawn(ext, net: 'COMP') -> None:
     tmpl = ensureTemplate(ext)
     if tmpl is None:
         return
-    for c in list(net.children):            # clear orphans
+    for c in list(net.children):  # clear orphans
         if c.name.startswith(_VIZ_BOT_PREFIX) and c.valid:
             try:
                 c.destroy()
             except Exception:
                 pass
-    srcs = [tmpl.op(_VIZ_BOT_PREFIX + s)
-            for (s, _ox, _oy, _w, _h, _e) in _VIZ_BOT_PARTS]
-    srcs.append(tmpl.op(_VIZ_BOT_PREFIX + 'speech'))
+    srcs = [tmpl.op(_VIZ_BOT_PREFIX + s) for (s, _ox, _oy, _w, _h, _e) in _VIZ_BOT_PARTS]
+    srcs.append(tmpl.op(_VIZ_BOT_PREFIX + "speech"))
     srcs = [s for s in srcs if s]
     try:
-        ext._crashTrace('blockSpawn COPY %d -> %s (off-screen)' % (len(srcs), net.path))
+        ext._crashTrace("blockSpawn COPY %d -> %s (off-screen)" % (len(srcs), net.path))
         new = net.copyOPs(srcs)
-        ext._crashTrace('blockSpawn COPIED %s' % net.path)
+        ext._crashTrace("blockSpawn COPIED %s" % net.path)
     except Exception:
         return
     idle = absTime.seconds - ext._viz_last_activity
     f = min(1.0, max(0.0, idle / _VIZ_WARM_S))
-    hue = round((_VIZ_COOL_HUE +
-                 (_VIZ_WARM_HUE - _VIZ_COOL_HUE) * f) * 36.0) / 36.0
+    hue = round((_VIZ_COOL_HUE + (_VIZ_WARM_HUE - _VIZ_COOL_HUE) * f) * 36.0) / 36.0
     skin = colorsys.hsv_to_rgb(hue, 0.95, 1.0)
     for n in new:
         n.selected = False
         bn = n.name
-        if bn.endswith('speech'):
+        if bn.endswith("speech"):
             continue
-        if bn.endswith('eye_l') or bn.endswith('eye_r'):
+        if bn.endswith("eye_l") or bn.endswith("eye_r"):
             n.par.Backcolorr, n.par.Backcolorg, n.par.Backcolorb = 0.0, 0.0, 0.0
         else:
             n.par.Backcolorr, n.par.Backcolorg, n.par.Backcolorb = skin
 
 
-def assembleStep(ext, net: 'COMP') -> None:
+def assembleStep(ext, net: "COMP") -> None:
     """Copy ONE queued template part into `net` -- the per-frame unit of Embot's
     spread assembly. Colours each part on arrival (skin for the body, black for
     eyes) so it looks right immediately, independent of _botDance's recolour
@@ -684,7 +701,7 @@ def assembleStep(ext, net: 'COMP') -> None:
         return
     name = q.pop(0)
     src = tmpl.op(name)
-    if not src or net.op(name):             # missing source / already present
+    if not src or net.op(name):  # missing source / already present
         return
     # copyOPs lands the copy at the SOURCE's coords, and the copy's cost is set by
     # whether THAT landing spot is in the viewport. So park the source at the off-view
@@ -697,26 +714,25 @@ def assembleStep(ext, net: 'COMP') -> None:
         except Exception:
             pass
     try:
-        ext._crashTrace('assembleStep COPY %s -> %s' % (name, net.path))
+        ext._crashTrace("assembleStep COPY %s -> %s" % (name, net.path))
         new = net.copyOPs([src])
-        ext._crashTrace('assembleStep COPIED %s' % name)
+        ext._crashTrace("assembleStep COPIED %s" % name)
         idle = absTime.seconds - ext._viz_last_activity
         f = min(1.0, max(0.0, idle / _VIZ_WARM_S))
-        hue = round((_VIZ_COOL_HUE +
-                     (_VIZ_WARM_HUE - _VIZ_COOL_HUE) * f) * 36.0) / 36.0
+        hue = round((_VIZ_COOL_HUE + (_VIZ_WARM_HUE - _VIZ_COOL_HUE) * f) * 36.0) / 36.0
         skin = colorsys.hsv_to_rgb(hue, 0.95, 1.0)
         pos = ext._viz_bot_pos
         for n in new:
             n.selected = False
             bn = n.name
-            if bn.endswith('speech'):
+            if bn.endswith("speech"):
                 # Place the bubble at the head on arrival so it never flashes at
                 # its copied (0,0) spot before _botDance catches it.
                 if pos:
                     n.nodeX = pos[0] - n.nodeWidth / 2.0
                     n.nodeY = pos[1] + 58.0
                 continue
-            if bn.endswith('eye_l') or bn.endswith('eye_r'):
+            if bn.endswith("eye_l") or bn.endswith("eye_r"):
                 n.par.Backcolorr, n.par.Backcolorg, n.par.Backcolorb = 0.0, 0.0, 0.0
             else:
                 n.par.Backcolorr, n.par.Backcolorg, n.par.Backcolorb = skin
@@ -770,14 +786,14 @@ def cleanupDeadBots(ext) -> None:
         return
     net = op(netpath)
     if net and net.valid:
-        ext._crashTrace('cleanupDead ENTER %s' % netpath)
+        ext._crashTrace("cleanupDead ENTER %s" % netpath)
         for c in list(net.children):
             if c.name.startswith(_VIZ_BOT_PREFIX) and c.valid:
                 try:
                     c.destroy()
                 except Exception:
                     pass
-        ext._crashTrace('cleanupDead DONE %s' % netpath)
+        ext._crashTrace("cleanupDead DONE %s" % netpath)
 
 
 def botDance(ext, now: float) -> None:
@@ -791,44 +807,47 @@ def botDance(ext, now: float) -> None:
     if not net:
         ext._viz_bot_net = None
         return
-    if (now - ext._viz_last_paint) < 0.033:    # cap figure repaint at ~30fps
+    if (now - ext._viz_last_paint) < 0.033:  # cap figure repaint at ~30fps
         return
     ext._viz_last_paint = now
     t = (now - ext._viz_bot_jump_t0) / ext._viz_jump_dur
     sx = sy = 1.0
-    if t < 1.0:                                   # mid-hop
-        e = 1.0 - (1.0 - t) * (1.0 - t)           # easeOutQuad (snappy)
+    if t < 1.0:  # mid-hop
+        e = 1.0 - (1.0 - t) * (1.0 - t)  # easeOutQuad (snappy)
         fx, fy = ext._viz_bot_from
         tx, ty = ext._viz_bot_target
         px = fx + (tx - fx) * e
         py = fy + (ty - fy) * e + _VIZ_JUMP_ARC * math.sin(math.pi * t)
-        if t > 0.82:                              # subtle squash on landing
+        if t > 0.82:  # subtle squash on landing
             k = (t - 0.82) / 0.18
             sx = 1.0 + _VIZ_SQUASH * k
             sy = 1.0 - _VIZ_SQUASH * k
-    else:                                         # standing still (robotic; no idle churn)
+    else:  # standing still (robotic; no idle churn)
         tx, ty = ext._viz_bot_target
         px, py = tx, ty
     ext._viz_bot_pos = (px, py)
     # --- random gestures at random intervals (not a fixed loop) ---
     if t >= 1.0 and now >= ext._viz_gesture_end and now >= ext._viz_next_gesture:
         if random.random() < 0.18:
-            gtype = 3                               # robot dance, now and then
+            gtype = 3  # robot dance, now and then
         else:
-            gtype = int(random.random() * 3)        # 0 wave / 1 reach / 2 pump
-            if gtype == ext._viz_gesture_type:      # avoid an immediate repeat
+            gtype = int(random.random() * 3)  # 0 wave / 1 reach / 2 pump
+            if gtype == ext._viz_gesture_type:  # avoid an immediate repeat
                 gtype = (gtype + 1) % 3
         ext._viz_gesture_type = gtype
         ext._viz_gesture_start = now
         ext._viz_gesture_end = now + (_VIZ_DANCE_DUR if gtype == 3 else _VIZ_GESTURE_DUR)
-        ext._viz_next_gesture = ext._viz_gesture_end + _VIZ_GESTURE_GAP_MIN + \
-            random.random() * (_VIZ_GESTURE_GAP_MAX - _VIZ_GESTURE_GAP_MIN)
+        ext._viz_next_gesture = (
+            ext._viz_gesture_end
+            + _VIZ_GESTURE_GAP_MIN
+            + random.random() * (_VIZ_GESTURE_GAP_MAX - _VIZ_GESTURE_GAP_MIN)
+        )
     active = (t >= 1.0) and (now < ext._viz_gesture_end)
     gi = ext._viz_gesture_type
     gdur = ext._viz_gesture_end - ext._viz_gesture_start
     gp = now - ext._viz_gesture_start
     genv = math.sin(math.pi * (gp / gdur)) if (active and gdur > 0.0) else 0.0
-    if active and gi == 3:                          # robot dance: full-body sway + bob
+    if active and gi == 3:  # robot dance: full-body sway + bob
         px = px + round(math.sin(gp * 6.0)) * 11.0 * genv
         py = py + abs(math.sin(gp * 9.0)) * 7.0 * genv
     # Quantized "thinking" colour -- changes a few times/sec, not 60. Writing
@@ -839,7 +858,7 @@ def botDance(ext, now: float) -> None:
     f = min(1.0, max(0.0, idle / _VIZ_WARM_S))
     hue = round((_VIZ_COOL_HUE + (_VIZ_WARM_HUE - _VIZ_COOL_HUE) * f) * 36.0) / 36.0
     skin = colorsys.hsv_to_rgb(hue, 0.95, 1.0)
-    recolor = (skin != ext._viz_last_skin)
+    recolor = skin != ext._viz_last_skin
     ext._viz_last_skin = skin
     # Only repaint when actually animating (a jump or a gesture) or when the
     # quantized colour ticks -- otherwise leave the parts untouched so idle
@@ -850,19 +869,26 @@ def botDance(ext, now: float) -> None:
     # the open<->closed TRANSITION (2 colour writes per blink), so it costs almost
     # nothing and does NOT force a full-figure repaint.
     if now >= ext._viz_next_blink:
-        ext._viz_blink_end = now + 0.13                          # blink lasts ~0.13s
+        ext._viz_blink_end = now + 0.13  # blink lasts ~0.13s
         ext._viz_next_blink = now + 2.0 + random.random() * 3.5  # next blink in 2-5.5s
     blinking = now < ext._viz_blink_end
     if blinking != ext._viz_eyes_closed:
         if blinking:
             # match the body's ACTUAL current colour (recolor lags the computed
             # skin) so the eyes truly vanish into the face.
-            _bp = net.op(_VIZ_BOT_PREFIX + 'body')
-            eye_col = ((_bp.par.Backcolorr.eval(), _bp.par.Backcolorg.eval(),
-                        _bp.par.Backcolorb.eval()) if (_bp and _bp.valid) else skin)
+            _bp = net.op(_VIZ_BOT_PREFIX + "body")
+            eye_col = (
+                (
+                    _bp.par.Backcolorr.eval(),
+                    _bp.par.Backcolorg.eval(),
+                    _bp.par.Backcolorb.eval(),
+                )
+                if (_bp and _bp.valid)
+                else skin
+            )
         else:
             eye_col = (0.0, 0.0, 0.0)
-        for _es in ('eye_l', 'eye_r'):
+        for _es in ("eye_l", "eye_r"):
             _ep = net.op(_VIZ_BOT_PREFIX + _es)
             if _ep and _ep.valid:
                 _ep.par.Backcolorr, _ep.par.Backcolorg, _ep.par.Backcolorb = eye_col
@@ -872,39 +898,40 @@ def botDance(ext, now: float) -> None:
     # Applied via the parts loop below (eye gw/gh when squinting), so it costs only
     # the 2 transition frames it forces, not a per-frame repaint.
     if ext._viz_next_squint == 0.0:
-        ext._viz_next_squint = now + _VIZ_SQUINT_GAP_MIN   # never squint on spawn
+        ext._viz_next_squint = now + _VIZ_SQUINT_GAP_MIN  # never squint on spawn
     if now >= ext._viz_next_squint:
         ext._viz_squint_end = now + _VIZ_SQUINT_DUR
-        ext._viz_next_squint = now + _VIZ_SQUINT_GAP_MIN + \
-            random.random() * (_VIZ_SQUINT_GAP_MAX - _VIZ_SQUINT_GAP_MIN)
+        ext._viz_next_squint = now + _VIZ_SQUINT_GAP_MIN + random.random() * (_VIZ_SQUINT_GAP_MAX - _VIZ_SQUINT_GAP_MIN)
     squinting = now < ext._viz_squint_end
-    squint_changed = (squinting != ext._viz_squinting)
+    squint_changed = squinting != ext._viz_squinting
     ext._viz_squinting = squinting
     moving = (t < 1.0) or active or bool(ext._viz_bot_build_queue)
     if moving or recolor or squint_changed:
-        ext._crashTrace('botDance PARTS moving=%d recolor=%d t=%.2f %s' %
-                        (int(moving), int(recolor), t, np))
-        for (suffix, ox, oy, w, h, is_eye) in _VIZ_BOT_PARTS:
+        ext._crashTrace("botDance PARTS moving=%d recolor=%d t=%.2f %s" % (int(moving), int(recolor), t, np))
+        for suffix, ox, oy, w, h, is_eye in _VIZ_BOT_PARTS:
             p = net.op(_VIZ_BOT_PREFIX + suffix)
             if not p or not p.valid:
                 continue
             gw = gh = 1.0
             if active:
-                if gi == 0 and suffix == 'arm_r':                  # wave
+                if gi == 0 and suffix == "arm_r":  # wave
                     oy = oy + _VIZ_WAVE_LIFT * genv
                     ox = ox + math.sin(gp * _VIZ_WAVE_FREQ) * _VIZ_WAVE_AMP * genv
-                elif gi == 1 and suffix in ('arm_l', 'arm_r'):     # shrug: lift arms straight up (no scaling)
+                elif gi == 1 and suffix in (
+                    "arm_l",
+                    "arm_r",
+                ):  # shrug: lift arms straight up (no scaling)
                     oy = oy + 16.0 * genv
-                elif gi == 2 and suffix in ('arm_l', 'arm_r'):     # both arms pump up
+                elif gi == 2 and suffix in ("arm_l", "arm_r"):  # both arms pump up
                     oy = oy + _VIZ_WAVE_LIFT * 0.75 * genv
-                elif gi == 3:                                      # robot dance: limbs + head
-                    if suffix == 'arm_l':
+                elif gi == 3:  # robot dance: limbs + head
+                    if suffix == "arm_l":
                         oy = oy + 20.0 * genv * (0.5 + 0.5 * math.sin(gp * 7.0))
-                    elif suffix == 'arm_r':
+                    elif suffix == "arm_r":
                         oy = oy + 20.0 * genv * (0.5 + 0.5 * math.sin(gp * 7.0 + math.pi))
-                    elif suffix in ('head', 'eye_l', 'eye_r'):
+                    elif suffix in ("head", "eye_l", "eye_r"):
                         ox = ox + round(math.sin(gp * 6.0)) * 4.0 * genv
-            if is_eye and squinting:                    # happy squint: flatten + spread
+            if is_eye and squinting:  # happy squint: flatten + spread
                 gw *= _VIZ_SQUINT_WIDEN
                 gh *= _VIZ_SQUINT_FLATTEN
             pw, ph = w * sx * gw, h * sy * gh
@@ -916,15 +943,14 @@ def botDance(ext, now: float) -> None:
                 if is_eye:
                     # open -> black; mid-blink -> track the body's NEW skin so the
                     # eyes stay vanished even if the thinking-colour ticks.
-                    p.par.Backcolorr, p.par.Backcolorg, p.par.Backcolorb = \
-                        (skin if blinking else (0.0, 0.0, 0.0))
+                    p.par.Backcolorr, p.par.Backcolorg, p.par.Backcolorb = skin if blinking else (0.0, 0.0, 0.0)
                 else:
                     p.par.Backcolorr, p.par.Backcolorg, p.par.Backcolorb = skin
-        ext._crashTrace('botDance PARTS-DONE')
+        ext._crashTrace("botDance PARTS-DONE")
     # Speech bubble: follow + a Claude-Code-style typewriter -> spinner + dots.
     # The spinner only runs while actively building (idle < a few sec) so an
     # idle Embot does not churn redraws.
-    sp = net.op(_VIZ_BOT_PREFIX + 'speech')
+    sp = net.op(_VIZ_BOT_PREFIX + "speech")
     if sp and sp.valid:
         # Anchor the bubble to Embot's BASE position (_viz_bot_pos, captured before
         # the dance sway is added to px/py), NOT the animated px/py. So it follows
@@ -941,41 +967,45 @@ def botDance(ext, now: float) -> None:
         if act != ext._viz_speech_src:
             ext._viz_speech_src = act
             ext._viz_speech_t0 = now
-        if ext._viz_target_queue:         # actively stepping: show the CURRENT
-            ext._viz_speech_t0 = now      # caption instantly. The typewriter could
-            line = act                    # not keep up with fast hops, so it lagged
-                                          # a step behind; reset it for when we settle.
+        if ext._viz_target_queue:  # actively stepping: show the CURRENT
+            ext._viz_speech_t0 = now  # caption instantly. The typewriter could
+            line = act  # not keep up with fast hops, so it lagged
+            # a step behind; reset it for when we settle.
         else:
-            shown = act[:int((now - ext._viz_speech_t0) * 45.0)]
+            shown = act[: int((now - ext._viz_speech_t0) * 45.0)]
             if len(shown) < len(act):
-                line = shown + '_'                        # typing (settled, faster)
-            elif idle < 4.0:                              # working -> spinner + dots
-                line = '%s %s%s' % ('|/-\\'[int(now * 4.0) % 4], act, '.' * (int(now * 2.0) % 4))
+                line = shown + "_"  # typing (settled, faster)
+            elif idle < 4.0:  # working -> spinner + dots
+                line = "%s %s%s" % (
+                    "|/-\\"[int(now * 4.0) % 4],
+                    act,
+                    "." * (int(now * 2.0) % 4),
+                )
             else:
-                line = act                                # idle -> static (no churn)
+                line = act  # idle -> static (no churn)
         if sp.par.Bodytext.eval() != line:
-            ext._crashTrace('botDance SPEECH-WRITE')
+            ext._crashTrace("botDance SPEECH-WRITE")
             sp.par.Bodytext = line
-            ext._crashTrace('botDance SPEECH-DONE')
+            ext._crashTrace("botDance SPEECH-DONE")
 
 
-def botUnsafeNet(ext, net: 'COMP') -> bool:
+def botUnsafeNet(ext, net: "COMP") -> bool:
     """True if a bot must NOT be created in `net` -- it would risk being saved.
     Unsafe: under /local, under the Embody COMP (ExportPortableTox captures
     Embody's descendants), or inside any TDN-strategy COMP (captured by .tdn
     export)."""
     try:
-        if net.path.startswith('/local'):
+        if net.path.startswith("/local"):
             return True
         embody_path = ext.ownerComp.path
         tdn = ext.ownerComp.ext.Embody._getTDNPaths()
         p = net
-        while p is not None and p.path != '/':
+        while p is not None and p.path != "/":
             if p.path == embody_path or p.path in tdn:
                 return True
             p = p.parent()
     except Exception:
-        return True   # any doubt -> do not create
+        return True  # any doubt -> do not create
     return False
 
 
@@ -985,15 +1015,15 @@ def destroyBot(ext) -> None:
     if np:
         net = op(np)
         if net:
-            ext._crashTrace('destroyBot ENTER %s' % np)
+            ext._crashTrace("destroyBot ENTER %s" % np)
             for c in list(net.children):
                 if c.name.startswith(_VIZ_BOT_PREFIX) and c.valid:
                     try:
-                        ext._crashTrace('destroyBot DESTROY %s' % c.name)
+                        ext._crashTrace("destroyBot DESTROY %s" % c.name)
                         c.destroy()
                     except Exception:
                         pass
-            ext._crashTrace('destroyBot DONE %s' % np)
+            ext._crashTrace("destroyBot DONE %s" % np)
     ext._viz_bot_net = None
     ext._viz_bot_pos = None
     ext._viz_bot_from = None
@@ -1020,14 +1050,19 @@ def vizCleanup(ext) -> None:
     ext._viz_bot_pending_cleanup = set()
     ext._viz_target_queue = []
     ext._viz_hop_until = 0.0
-    ext._viz_follow_net = None   # re-establish zoom next time we follow somewhere
+    ext._viz_follow_net = None  # re-establish zoom next time we follow somewhere
 
 
 def viewTuple(ext, pane) -> tuple:
     """A comparable snapshot of a pane's view state (id, owner, pan, zoom)."""
     owner_path = pane.owner.path if pane.owner else None
-    return (pane.id, owner_path, round(pane.x, 2), round(pane.y, 2),
-            round(pane.zoom, 4))
+    return (
+        pane.id,
+        owner_path,
+        round(pane.x, 2),
+        round(pane.y, 2),
+        round(pane.zoom, 4),
+    )
 
 
 def recordView(ext, pane) -> None:
